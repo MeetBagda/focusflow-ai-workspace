@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 
 import { Task } from "./types/task";
 import { Note } from "./types/note";
+import { Project } from "./types/project";
 
 // Generate a unique ID
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -47,6 +48,18 @@ const App = () => {
     return [];
   });
 
+  const [projects, setProjects] = useState<Project[]>(() => {
+    const saved = localStorage.getItem("focusflow-projects");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Error parsing projects from localStorage:", e);
+      }
+    }
+    return [];
+  });
+
   // Save data to localStorage when it changes
   useEffect(() => {
     localStorage.setItem("focusflow-tasks", JSON.stringify(tasks));
@@ -56,14 +69,21 @@ const App = () => {
     localStorage.setItem("focusflow-notes", JSON.stringify(notes));
   }, [notes]);
 
+  useEffect(() => {
+    localStorage.setItem("focusflow-projects", JSON.stringify(projects));
+  }, [projects]);
+
   // Task functions
-  const addTask = (title: string, dueDate: Date | null) => {
+  const addTask = (title: string, dueDate: Date | null, projectId?: string) => {
     const newTask: Task = {
       id: generateId(),
       title,
       completed: false,
       dueDate: dueDate ? dueDate.toISOString() : null,
       createdAt: new Date().toISOString(),
+      priority: "high",
+      isRecurring: false,
+      projectId: projectId || null
     };
     setTasks([...tasks, newTask]);
   };
@@ -78,6 +98,22 @@ const App = () => {
 
   const deleteTask = (id: string) => {
     setTasks(tasks.filter((task) => task.id !== id));
+  };
+
+  const updateTask = (id: string, updates: Partial<Task>) => {
+    setTasks(tasks.map((task) =>
+      task.id === id ? { ...task, ...updates } : task
+    ));
+  };
+
+  const duplicateTask = (task: Task) => {
+    const newTask = {
+      ...task,
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      title: `${task.title} (Copy)`
+    };
+    setTasks([...tasks, newTask]);
   };
 
   // Note functions
@@ -105,7 +141,27 @@ const App = () => {
   const deleteNote = (id: string) => {
     setNotes(notes.filter((note) => note.id !== id));
   };
-  
+
+  // Project functions
+  const addProject = (project: Omit<Project, "id" | "createdAt">) => {
+    const newProject: Project = {
+      ...project,
+      id: generateId(),
+      createdAt: new Date().toISOString()
+    };
+    setProjects([...projects, newProject]);
+  };
+
+  const updateProject = (id: string, updates: Partial<Project>) => {
+    setProjects(projects.map((project) =>
+      project.id === id ? { ...project, ...updates } : project
+    ));
+  };
+
+  const deleteProject = (id: string) => {
+    setProjects(projects.filter((project) => project.id !== id));
+  };
+
   // Event listeners for quick actions
   useEffect(() => {
     const handleQuickAddTask = (event: Event) => {
@@ -151,9 +207,15 @@ const App = () => {
                 element={
                   <Tasks
                     tasks={tasks}
+                    projects={projects}
                     onAddTask={addTask}
                     onToggleComplete={toggleTaskComplete}
                     onDeleteTask={deleteTask}
+                    onUpdateTask={updateTask}
+                    onDuplicateTask={duplicateTask}
+                    onAddProject={addProject}
+                    onUpdateProject={updateProject}
+                    onDeleteProject={deleteProject}
                   />
                 }
               />

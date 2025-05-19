@@ -1,24 +1,34 @@
 
 import React from "react";
 import { Task } from "@/types/task";
+import { Project } from "@/types/project";
 import { format, isToday, isTomorrow, addDays, isAfter, isBefore, startOfDay } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import TaskItem from "./TaskItem";
 import { QuickTaskForm } from "../dashboard/QuickTaskForm";
-import { Plus } from "lucide-react";
 
 interface TaskBoardProps {
   tasks: Task[];
+  projects?: Project[];
+  currentProject?: Project | null;
   onToggleComplete: (id: string) => void;
   onDeleteTask: (id: string) => void;
-  onAddTask?: (title: string, dueDate: Date | null) => void;
+  onAddTask?: (title: string, dueDate: Date | null, projectId?: string) => void;
+  onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  onDuplicateTask?: (task: Task) => void;
+  onMoveTask?: (taskId: string, projectId: string) => void;
 }
 
 const TaskBoard: React.FC<TaskBoardProps> = ({
   tasks,
+  projects = [],
+  currentProject = null,
   onToggleComplete,
   onDeleteTask,
   onAddTask,
+  onUpdateTask,
+  onDuplicateTask,
+  onMoveTask,
 }) => {
   // Get current date
   const today = startOfDay(new Date());
@@ -26,20 +36,25 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   const dayAfterTomorrow = addDays(today, 2);
   const twoDaysAfterTomorrow = addDays(today, 3);
 
+  // Filter tasks by current project if selected
+  const filteredTasks = currentProject 
+    ? tasks.filter(task => task.projectId === currentProject.id)
+    : tasks;
+
   // Group tasks by timeframe
-  const overdueTasks = tasks.filter(
+  const overdueTasks = filteredTasks.filter(
     (task) => !task.completed && task.dueDate && isBefore(new Date(task.dueDate), today)
   );
   
-  const todayTasks = tasks.filter(
+  const todayTasks = filteredTasks.filter(
     (task) => task.dueDate && isToday(new Date(task.dueDate))
   );
   
-  const tomorrowTasks = tasks.filter(
+  const tomorrowTasks = filteredTasks.filter(
     (task) => task.dueDate && isTomorrow(new Date(task.dueDate))
   );
   
-  const upcomingTasks = tasks.filter(
+  const upcomingTasks = filteredTasks.filter(
     (task) => 
       task.dueDate && 
       isAfter(new Date(task.dueDate), tomorrow) &&
@@ -49,7 +64,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   // Function to handle adding a task with a specific due date
   const handleAddTask = (title: string, columnDate: Date) => {
     if (onAddTask) {
-      onAddTask(title, columnDate);
+      onAddTask(title, columnDate, currentProject?.id);
     }
   };
 
@@ -68,7 +83,10 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
         key={task.id}
         task={task}
         onToggleComplete={onToggleComplete}
-        onDelete={onDeleteTask}
+        onDeleteTask={onDeleteTask}
+        projects={projects}
+        showProjectBadge={!currentProject}
+        currentProject={currentProject}
       />
     ));
   };
