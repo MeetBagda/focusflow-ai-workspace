@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -8,11 +7,11 @@ import { Project } from "@/types/project";
 
 interface TaskItemProps {
   task: Task;
-  onToggleComplete: (id: string) => void;
-  onDeleteTask: (id: string) => void;
-  onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  onToggleComplete: (id: number) => void;
+  onDeleteTask: (id: number) => void;
+  onUpdateTask?: (id: number, updates: Partial<Task>) => void;
   onDuplicateTask?: (task: Task) => void;
-  onMoveTask?: (taskId: string, projectId: string) => void;
+  onMoveTask?: (taskId: number, projectId: number) => void;
   projects?: Project[];
   showProjectBadge?: boolean;
   currentProject?: Project | null;
@@ -30,8 +29,8 @@ const TaskItem: React.FC<TaskItemProps> = ({
   currentProject = null,
 }) => {
   // Find the project this task belongs to
-  const taskProject = showProjectBadge && task.projectId 
-    ? projects.find(p => p.id === task.projectId) 
+  const taskProject = showProjectBadge && task.project_id 
+    ? projects.find(p => p.id === task.project_id) 
     : null;
 
   return (
@@ -69,9 +68,9 @@ const TaskItem: React.FC<TaskItemProps> = ({
       </div>
       
       <div className="flex items-center gap-2">
-        {task.dueDate && (
+        {task.due_date && (
           <span className="text-xs text-muted-foreground">
-            {new Date(task.dueDate).toLocaleDateString()}
+            {new Date(task.due_date).toLocaleDateString()}
           </span>
         )}
         <div className="hidden md:block">

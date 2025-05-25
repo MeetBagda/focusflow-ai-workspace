@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Task } from "@/types/task";
 import { Project } from "@/types/project";
@@ -11,12 +10,12 @@ interface TaskBoardProps {
   tasks: Task[];
   projects?: Project[];
   currentProject?: Project | null;
-  onToggleComplete: (id: string) => void;
-  onDeleteTask: (id: string) => void;
-  onAddTask?: (title: string, dueDate: Date | null, projectId?: string) => void;
-  onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  onToggleComplete: (id: number) => void;
+  onDeleteTask: (id: number) => void;
+  onAddTask: (task: Partial<Task>) => void;
+  onUpdateTask?: (id: number, updates: Partial<Task>) => void;
   onDuplicateTask?: (task: Task) => void;
-  onMoveTask?: (taskId: string, projectId: string) => void;
+  onMoveTask?: (taskId: number, projectId: number) => void;
 }
 
 const TaskBoard: React.FC<TaskBoardProps> = ({
@@ -38,34 +37,40 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 
   // Filter tasks by current project if selected
   const filteredTasks = currentProject 
-    ? tasks.filter(task => task.projectId === currentProject.id)
+    ? tasks.filter(task => task.project_id === currentProject.id)
     : tasks;
 
   // Group tasks by timeframe
   const overdueTasks = filteredTasks.filter(
-    (task) => !task.completed && task.dueDate && isBefore(new Date(task.dueDate), today)
+    (task) => !task.completed && task.due_date && isBefore(new Date(task.due_date), today)
   );
   
   const todayTasks = filteredTasks.filter(
-    (task) => task.dueDate && isToday(new Date(task.dueDate))
+    (task) => task.due_date && isToday(new Date(task.due_date))
   );
   
   const tomorrowTasks = filteredTasks.filter(
-    (task) => task.dueDate && isTomorrow(new Date(task.dueDate))
+    (task) => task.due_date && isTomorrow(new Date(task.due_date))
   );
   
   const upcomingTasks = filteredTasks.filter(
     (task) => 
-      task.dueDate && 
-      isAfter(new Date(task.dueDate), tomorrow) &&
-      isBefore(new Date(task.dueDate), addDays(today, 7))
+      task.due_date && 
+      isAfter(new Date(task.due_date), tomorrow) &&
+      isBefore(new Date(task.due_date), addDays(today, 7))
   );
 
   // Function to handle adding a task with a specific due date
-  const handleAddTask = (title: string, columnDate: Date) => {
-    if (onAddTask) {
-      onAddTask(title, columnDate, currentProject?.id);
-    }
+  const handleAddTask = (title: string, dueDate: Date | null = null) => {
+    onAddTask({
+      title,
+      due_date: dueDate?.toISOString() || null,
+      project_id: currentProject?.id || null,
+      completed: false,
+      priority: "high",
+      is_recurring: false,
+      description: null
+    });
   };
 
   // Function to render the task list for a column
@@ -84,6 +89,9 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
         task={task}
         onToggleComplete={onToggleComplete}
         onDeleteTask={onDeleteTask}
+        onUpdateTask={onUpdateTask}
+        onDuplicateTask={onDuplicateTask}
+        onMoveTask={onMoveTask}
         projects={projects}
         showProjectBadge={!currentProject}
         currentProject={currentProject}

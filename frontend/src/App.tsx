@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
@@ -13,239 +13,215 @@ import Notes from "./pages/Notes";
 import Calendar from "./pages/Calendar";
 import NotFound from "./pages/NotFound";
 
-import { Task } from "./types/task";
-import { Note } from "./types/note";
-import { Project } from "./types/project";
+import { useTasks, useProjects, useNotes } from "@/hooks/useApi";
 
-// Generate a unique ID
-const generateId = () => Math.random().toString(36).substring(2, 15);
-
-const queryClient = new QueryClient();
-
-const App = () => {
-  // Load initial data from localStorage
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem("focusflow-tasks");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Error parsing tasks from localStorage:", e);
-      }
+// Create a new QueryClient instance outside of any component
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false, // Do not refetch queries when the window regains focus
+      staleTime: 5 * 60 * 1000, // Data is considered stale after 5 minutes
+      retry: 1 // Retry failed queries once
     }
-    return [];
-  });
+  }
+});
 
-  const [notes, setNotes] = useState<Note[]>(() => {
-    const saved = localStorage.getItem("focusflow-notes");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Error parsing notes from localStorage:", e);
-      }
-    }
-    return [];
-  });
+/**
+ * AppContent component contains all the logic that relies on React Query hooks.
+ * This component is rendered as a child of QueryClientProvider to ensure the context is available.
+ */
+const AppContent = () => {
+  // Destructure hooks for tasks, projects, and notes from useApi
+  const { 
+    tasks, 
+    tasksLoading,
+    addTask,
+    updateTask,
+    deleteTask,
+    duplicateTask 
+  } = useTasks();
 
-  const [projects, setProjects] = useState<Project[]>(() => {
-    const saved = localStorage.getItem("focusflow-projects");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Error parsing projects from localStorage:", e);
-      }
-    }
-    return [];
-  });
+  const {
+    projects,
+    projectsLoading,
+    addProject,
+    updateProject,
+    deleteProject
+  } = useProjects();
 
-  // Save data to localStorage when it changes
+  const {
+    notes,
+    notesLoading,
+    addNote: saveNote, // Renamed addNote to saveNote to avoid naming conflicts
+    updateNote,
+    deleteNote
+  } = useNotes();
+
+  // useEffect hook to handle custom events for quick adding tasks and notes
   useEffect(() => {
-    localStorage.setItem("focusflow-tasks", JSON.stringify(tasks));
-  }, [tasks]);
-
-  useEffect(() => {
-    localStorage.setItem("focusflow-notes", JSON.stringify(notes));
-  }, [notes]);
-
-  useEffect(() => {
-    localStorage.setItem("focusflow-projects", JSON.stringify(projects));
-  }, [projects]);
-
-  // Task functions
-  const addTask = (title: string, dueDate: Date | null, projectId?: string) => {
-    const newTask: Task = {
-      id: generateId(),
-      title,
-      completed: false,
-      dueDate: dueDate ? dueDate.toISOString() : null,
-      createdAt: new Date().toISOString(),
-      priority: "high",
-      isRecurring: false,
-      projectId: projectId || null
-    };
-    setTasks([...tasks, newTask]);
-  };
-
-  const toggleTaskComplete = (id: string) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
-    );
-  };
-
-  const deleteTask = (id: string) => {
-    setTasks(tasks.filter((task) => task.id !== id));
-  };
-
-  const updateTask = (id: string, updates: Partial<Task>) => {
-    setTasks(tasks.map((task) =>
-      task.id === id ? { ...task, ...updates } : task
-    ));
-  };
-
-  const duplicateTask = (task: Task) => {
-    const newTask = {
-      ...task,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-      title: `${task.title} (Copy)`
-    };
-    setTasks([...tasks, newTask]);
-  };
-
-  // Note functions
-  const saveNote = (note: Partial<Note>) => {
-    if (note.id) {
-      // Updating existing note
-      setNotes(
-        notes.map((n) =>
-          n.id === note.id ? { ...n, ...note, updatedAt: new Date().toISOString() } : n
-        )
-      );
-    } else {
-      // Creating new note
-      const newNote: Note = {
-        id: generateId(),
-        title: note.title || "Untitled Note",
-        content: note.content || "",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setNotes([...notes, newNote]);
-    }
-  };
-
-  const deleteNote = (id: string) => {
-    setNotes(notes.filter((note) => note.id !== id));
-  };
-
-  // Project functions
-  const addProject = (project: Omit<Project, "id" | "createdAt">) => {
-    const newProject: Project = {
-      ...project,
-      id: generateId(),
-      createdAt: new Date().toISOString()
-    };
-    setProjects([...projects, newProject]);
-  };
-
-  const updateProject = (id: string, updates: Partial<Project>) => {
-    setProjects(projects.map((project) =>
-      project.id === id ? { ...project, ...updates } : project
-    ));
-  };
-
-  const deleteProject = (id: string) => {
-    setProjects(projects.filter((project) => project.id !== id));
-  };
-
-  // Event listeners for quick actions
-  useEffect(() => {
+    // Handler for adding a quick task
     const handleQuickAddTask = (event: Event) => {
-      const { title, dueDate } = (event as CustomEvent).detail;
-      addTask(title, dueDate);
+      const { title, dueDate, projectId } = (event as CustomEvent).detail;
+      addTask({
+        title,
+        due_date: dueDate?.toISOString(),
+        project_id: projectId || null,
+        completed: false,
+        priority: "high",
+        is_recurring: false,
+        description: null,
+        id: 0,
+        reminder: "",
+        recurrence_pattern: "",
+        created_at: "",
+        updated_at: ""
+      });
     };
     
+    // Handler for adding a quick note
     const handleQuickAddNote = (event: Event) => {
       const { title, content } = (event as CustomEvent).detail;
-      saveNote({ title, content });
+      saveNote({
+        title,
+        content,
+        project_id: null,
+        id: 0,
+        created_at: "",
+        updated_at: ""
+      });
     };
     
+    // Add event listeners for custom app events
     document.addEventListener("app:addTask", handleQuickAddTask);
     document.addEventListener("app:addNote", handleQuickAddNote);
     
+    // Cleanup function to remove event listeners when the component unmounts
     return () => {
       document.removeEventListener("app:addTask", handleQuickAddTask);
       document.removeEventListener("app:addNote", handleQuickAddNote);
     };
-  }, [tasks, notes]);
+  }, [addTask, saveNote]); // Dependencies for the useEffect hook
 
+  // Show a loading indicator while data is being fetched
+  if (tasksLoading || projectsLoading || notesLoading) {
+    return <div>Loading...</div>;
+  }
+
+  // Render the main application content once data is loaded
   return (
+    <TooltipProvider>
+      <Toaster /> {/* Toast notifications */}
+      <Sonner /> {/* Sonner notifications */}
+      <BrowserRouter> {/* React Router for navigation */}
+        <Routes>
+          <Route path="/" element={<AppLayout />}> {/* Main layout for the app */}
+            <Route
+              index // Default route for the AppLayout
+              element={
+                <Dashboard
+                  tasks={tasks || []}
+                  notes={notes || []}
+                  // Map project IDs to strings as required by the Dashboard component
+                  projects={(projects || []).map(p => ({ id: String(p.id), name: p.name }))}
+                  // Callback for toggling task completion status
+                  onToggleTaskComplete={(id) => updateTask({ 
+                    id: Number(id), 
+                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed } 
+                  })}
+                  onDeleteTask={(id) => deleteTask(Number(id))}
+                />
+              }
+            />
+            <Route
+              path="tasks" // Route for the tasks page
+              element={
+                <Tasks
+                  tasks={tasks || []}
+                  projects={projects || []}
+                  // Callback for adding a new task
+                  onAddTask={(title, dueDate, projectId) => addTask({
+                    title,
+                    due_date: dueDate?.toISOString() || null,
+                    project_id: projectId ? Number(projectId) : null,
+                    completed: false,
+                    priority: "high",
+                    is_recurring: false,
+                    id: 0,
+                    description: "",
+                    reminder: "",
+                    recurrence_pattern: "",
+                    created_at: "",
+                    updated_at: ""
+                  })}
+                  // Callback for toggling task completion
+                  onToggleComplete={(id) => updateTask({ 
+                    id: Number(id), 
+                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed } 
+                  })}
+                  onDeleteTask={(id) => deleteTask(Number(id))}
+                  onUpdateTask={(id, updates) => updateTask({ id: Number(id), data: updates })}
+                  onDuplicateTask={duplicateTask}
+                  onAddProject={addProject}
+                  onUpdateProject={(id, updates) => updateProject({ id: Number(id), data: updates })}
+                  onDeleteProject={(id) => deleteProject(Number(id))}
+                />
+              }
+            />
+            <Route path="focus" element={<Focus />} /> {/* Route for the focus page */}
+              <Route
+              path="notes" // Route for the notes page
+              element={
+                <Notes
+                  notes={notes || []}
+                  onSaveNote={saveNote}
+                  onDeleteNote={(id) => deleteNote(Number(id))}
+                />
+              }
+            />
+            <Route
+            path="calendar" // Route for the calendar page
+            element={
+              <Calendar 
+                tasks={tasks || []}
+                // Map project IDs to strings for the Calendar component
+                projects={(projects || []).map(p => ({ id: String(p.id), name: p.name }))}
+                // Callback for toggling task completion in calendar
+                onToggleComplete={(id) => updateTask({ 
+                    id: Number(id), 
+                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed } 
+                  })}
+                  onDeleteTask={(id) => deleteTask(Number(id))}
+                  // Callback for adding a new task from the calendar
+                  onAddTask={(title, dueDate) => addTask({
+                    title,
+                    due_date: dueDate?.toISOString() || null,
+                    project_id: null,
+                    completed: false,
+                    priority: "high",
+                    is_recurring: false,
+                    id: 0,
+                    description: "",
+                    reminder: "",
+                    recurrence_pattern: "",
+                    created_at: "",
+                    updated_at: ""
+                  })}
+              />
+            }
+            />
+            <Route path="*" element={<NotFound />} /> {/* Catch-all route for 404 */}
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </TooltipProvider>
+  );
+};
+
+const App = () => {
+  return (
+    // Provide the QueryClient to the entire application
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<AppLayout />}>
-              <Route
-                index
-                element={
-                  <Dashboard
-                    tasks={tasks}
-                    notes={notes}
-                    onToggleTaskComplete={toggleTaskComplete}
-                    onDeleteTask={deleteTask}
-                  />
-                }
-              />
-              <Route
-                path="tasks"
-                element={
-                  <Tasks
-                    tasks={tasks}
-                    projects={projects}
-                    onAddTask={addTask}
-                    onToggleComplete={toggleTaskComplete}
-                    onDeleteTask={deleteTask}
-                    onUpdateTask={updateTask}
-                    onDuplicateTask={duplicateTask}
-                    onAddProject={addProject}
-                    onUpdateProject={updateProject}
-                    onDeleteProject={deleteProject}
-                  />
-                }
-              />
-              <Route path="focus" element={<Focus />} />
-              <Route
-                path="notes"
-                element={
-                  <Notes
-                    notes={notes}
-                    onSaveNote={saveNote}
-                    onDeleteNote={deleteNote}
-                  />
-                }
-              />
-              <Route
-                path="calendar"
-                element={
-                  <Calendar 
-                    tasks={tasks} 
-                    onToggleComplete={toggleTaskComplete}
-                    onDeleteTask={deleteTask}
-                    onAddTask={addTask}
-                  />
-                }
-              />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <AppContent /> {/* Render the actual application content */}
     </QueryClientProvider>
   );
 };

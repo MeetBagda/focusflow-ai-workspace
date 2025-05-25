@@ -1,4 +1,4 @@
-
+// filepath: d:\VS CODE\SAAS\focusflow-ai-workspace\frontend\src\components\tasks\TaskList.tsx
 import React from "react";
 import TaskItem from "./TaskItem";
 import { Task } from "@/types/task";
@@ -6,11 +6,11 @@ import { Project } from "@/types/project";
 
 interface TaskListProps {
   tasks: Task[];
-  onToggleComplete: (id: string) => void;
-  onDelete: (id: string) => void;
-  onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  onToggleComplete: (id: number) => void;
+  onDelete: (id: number) => void;
+  onUpdateTask?: (id: number, updates: Partial<Task>) => void;
   onDuplicateTask?: (task: Task) => void;
-  onMoveTask?: (taskId: string, projectId: string) => void;
+  onMoveTask?: (taskId: number, projectId: number) => void;
   projects?: Project[];
   showProjectBadge?: boolean;
   currentProject?: Project | null;

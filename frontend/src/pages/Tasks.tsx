@@ -9,11 +9,13 @@ import ProjectSelector from "@/components/projects/ProjectSelector";
 import ProjectForm from "@/components/projects/ProjectForm";
 import ProjectSidebar from "@/components/projects/ProjectSidebar";
 import { useToast } from "@/components/ui/use-toast";
+import { apiClient } from "@/lib/client";
+import { taskApi } from "@/lib/tasks";
 
 interface TasksProps {
   tasks: Task[];
   projects: Project[];
-  onAddTask: (title: string, dueDate: Date | null, projectId?: string) => void;
+  onAddTask: (task: Partial<Task>) => void;  // Changed to match how it's called
   onToggleComplete: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onUpdateTask: (id: string, updates: Partial<Task>) => void;
@@ -58,21 +60,21 @@ const Tasks: React.FC<TasksProps> = ({
   // Filter tasks based on active tab and current project
   const filteredTasks = tasks.filter((task) => {
     // First filter by project
-    if (currentProject && task.projectId !== currentProject.id) return false;
+    if (currentProject && task.project_id !== currentProject.id) return false;
 
     if (activeTab === "all") return true;
     if (activeTab === "completed") return task.completed;
     if (activeTab === "uncompleted") return !task.completed;
 
-    if (!task.dueDate) return activeTab === "no-date";
+    if (!task.due_date) return activeTab === "no-date";
 
-    const dueDate = new Date(task.dueDate);
-    dueDate.setHours(0, 0, 0, 0);
+    const due_date = new Date(task.due_date);
+    due_date.setHours(0, 0, 0, 0);
 
-    if (activeTab === "today") return dueDate.getTime() === today.getTime();
-    if (activeTab === "tomorrow") return dueDate.getTime() === tomorrow.getTime();
+    if (activeTab === "today") return due_date.getTime() === today.getTime();
+    if (activeTab === "tomorrow") return due_date.getTime() === tomorrow.getTime();
     if (activeTab === "this-week") {
-      return dueDate > today && dueDate <= endOfWeek;
+      return due_date > today && due_date <= endOfWeek;
     }
     return false;
   });
@@ -80,21 +82,33 @@ const Tasks: React.FC<TasksProps> = ({
   // Calculate task counts by project for the sidebar
   const projectsWithCounts: ProjectWithTaskCount[] = projects.map(project => ({
     ...project,
-    taskCount: (tasks || []).filter(task => task.projectId === project.id).length
+    taskCount: (tasks || []).filter(task => task.project_id === project.id).length
   }));
 
   // Handle adding a new task
-  const handleAddTask = (title: string, dueDate: Date | null) => {
-    const projectId = currentProject?.id;
-    onAddTask(title, dueDate, projectId);
+  const handleAddTask = async (title: string, dueDate: Date | null) => {
+    const taskData = {
+      title,
+      due_date: dueDate?.toISOString() || null,
+      project_id: currentProject?.id || null,
+      completed: false,
+      priority: "high",
+      is_recurring: false,
+      description: null
+    };
+    
+  console.log('Creating task with data:', taskData); // Debug log
+   const response = await taskApi.createTask(taskData); // Send POST request to tasks endpoint
+   const createdTask = response.data; // Extract the created task from response
+  onAddTask(taskData); 
   };
 
   // Handle moving a task to a different project
   const handleMoveTask = (taskId: string, projectId: string) => {
-    onUpdateTask(taskId, { projectId });
+    onUpdateTask(taskId, { project_id: Number(projectId) });
     toast({
       title: "Task moved",
-      description: `Task moved to ${projects.find(p => p.id === projectId)?.name || 'another project'}`,
+      description: `Task moved to ${projects.find(p => p.id === Number(projectId))?.name || 'another project'}`,
     });
   };
 
@@ -142,9 +156,9 @@ const Tasks: React.FC<TasksProps> = ({
       <div className="hidden md:block w-64 border-r">
         <ProjectSidebar
           projects={projectsWithCounts}
-          currentProjectId={currentProject?.id || null}
+          currentproject_id={currentProject?.id || null}
           onSelectProject={(projectId) => 
-            setCurrentProject(projectId ? projects.find(p => p.id === projectId) || null : null)
+            setCurrentProject(projectId ? projects.find(p => p.id === Number(projectId)) || null : null)
           }
           onAddProject={() => {
             setEditingProject(null);
@@ -208,6 +222,9 @@ const Tasks: React.FC<TasksProps> = ({
               tasks={filteredTasks}
               onToggleComplete={onToggleComplete}
               onDelete={onDeleteTask}
+              onUpdateTask={onUpdateTask}
+              onDuplicateTask={onDuplicateTask}
+              onMoveTask={handleMoveTask}
               projects={projects}
               showProjectBadge={!currentProject}
               currentProject={currentProject}

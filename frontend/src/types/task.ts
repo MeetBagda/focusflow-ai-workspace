@@ -1,16 +1,14 @@
-
 export interface Task {
-  id: string;
+  id: number;
   title: string;
+  description: string | null;
   completed: boolean;
-  dueDate: string | null;
-  createdAt: string;
-  projectId?: string;
-  priority: 'high' | 'medium' | 'low' | null;
-  isRecurring: boolean;
-  reminder?: {
-    date: string;
-    time: string;
-    notified: boolean;
-  } | null;
+  due_date: string | null;
+  priority: string;
+  is_recurring: boolean;
+  project_id: number | null;
+  reminder: string | null;
+  recurrence_pattern: string | null;
+  created_at: string;
+  updated_at: string;
 }
