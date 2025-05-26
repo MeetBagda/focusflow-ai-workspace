@@ -3,7 +3,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-react";
 
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
@@ -12,16 +13,24 @@ import Focus from "./pages/Focus";
 import Notes from "./pages/Notes";
 import Calendar from "./pages/Calendar";
 import NotFound from "./pages/NotFound";
+import LandingPage from "./pages/LandingPage";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 
 import { useTasks, useProjects, useNotes } from "@/hooks/useApi";
+import CustomLogin from "./pages/CustomLogin";
+import CustomSignUp from "./pages/CustomSignUp";
+
+// Get Clerk publishable key from environment variables
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 // Create a new QueryClient instance outside of any component
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false, // Do not refetch queries when the window regains focus
-      staleTime: 5 * 60 * 1000, // Data is considered stale after 5 minutes
-      retry: 1 // Retry failed queries once
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000,
+      retry: 1
     }
   }
 });
@@ -31,7 +40,6 @@ const queryClient = new QueryClient({
  * This component is rendered as a child of QueryClientProvider to ensure the context is available.
  */
 const AppContent = () => {
-  // Destructure hooks for tasks, projects, and notes from useApi
   const { 
     tasks, 
     tasksLoading,
@@ -52,7 +60,7 @@ const AppContent = () => {
   const {
     notes,
     notesLoading,
-    addNote: saveNote, // Renamed addNote to saveNote to avoid naming conflicts
+    addNote: saveNote,
     updateNote,
     deleteNote
   } = useNotes();
@@ -100,7 +108,7 @@ const AppContent = () => {
       document.removeEventListener("app:addTask", handleQuickAddTask);
       document.removeEventListener("app:addNote", handleQuickAddNote);
     };
-  }, [addTask, saveNote]); // Dependencies for the useEffect hook
+  }, [addTask, saveNote]);
 
   // Show a loading indicator while data is being fetched
   if (tasksLoading || projectsLoading || notesLoading) {
@@ -110,20 +118,31 @@ const AppContent = () => {
   // Render the main application content once data is loaded
   return (
     <TooltipProvider>
-      <Toaster /> {/* Toast notifications */}
-      <Sonner /> {/* Sonner notifications */}
-      <BrowserRouter> {/* React Router for navigation */}
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
         <Routes>
-          <Route path="/" element={<AppLayout />}> {/* Main layout for the app */}
+          {/* Public routes */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<CustomLogin />} />
+          <Route path="/signup" element={<CustomSignUp />} />
+
+          {/* Protected routes - only accessible when signed in */}
+          <Route
+            path="/app/*"
+            element={
+              <SignedIn>
+                <AppLayout />
+              </SignedIn>
+            }
+          >
             <Route
-              index // Default route for the AppLayout
+              index
               element={
                 <Dashboard
                   tasks={tasks || []}
                   notes={notes || []}
-                  // Map project IDs to strings as required by the Dashboard component
                   projects={(projects || []).map(p => ({ id: String(p.id), name: p.name }))}
-                  // Callback for toggling task completion status
                   onToggleTaskComplete={(id) => updateTask({ 
                     id: Number(id), 
                     data: { completed: !tasks?.find(t => t.id === Number(id))?.completed } 
@@ -133,27 +152,12 @@ const AppContent = () => {
               }
             />
             <Route
-              path="tasks" // Route for the tasks page
+              path="tasks"
               element={
                 <Tasks
                   tasks={tasks || []}
                   projects={projects || []}
-                  // Callback for adding a new task
-                  onAddTask={(title, dueDate, projectId) => addTask({
-                    title,
-                    due_date: dueDate?.toISOString() || null,
-                    project_id: projectId ? Number(projectId) : null,
-                    completed: false,
-                    priority: "high",
-                    is_recurring: false,
-                    id: 0,
-                    description: "",
-                    reminder: "",
-                    recurrence_pattern: "",
-                    created_at: "",
-                    updated_at: ""
-                  })}
-                  // Callback for toggling task completion
+                  onAddTask={addTask}
                   onToggleComplete={(id) => updateTask({ 
                     id: Number(id), 
                     data: { completed: !tasks?.find(t => t.id === Number(id))?.completed } 
@@ -167,9 +171,9 @@ const AppContent = () => {
                 />
               }
             />
-            <Route path="focus" element={<Focus />} /> {/* Route for the focus page */}
-              <Route
-              path="notes" // Route for the notes page
+            <Route path="focus" element={<Focus />} />
+            <Route
+              path="notes"
               element={
                 <Notes
                   notes={notes || []}
@@ -179,20 +183,17 @@ const AppContent = () => {
               }
             />
             <Route
-            path="calendar" // Route for the calendar page
+            path="calendar"
             element={
               <Calendar 
                 tasks={tasks || []}
-                // Map project IDs to strings for the Calendar component
                 projects={(projects || []).map(p => ({ id: String(p.id), name: p.name }))}
-                // Callback for toggling task completion in calendar
                 onToggleComplete={(id) => updateTask({ 
                     id: Number(id), 
                     data: { completed: !tasks?.find(t => t.id === Number(id))?.completed } 
                   })}
                   onDeleteTask={(id) => deleteTask(Number(id))}
-                  // Callback for adding a new task from the calendar
-                  onAddTask={(title, dueDate) => addTask({
+                   onAddTask={(title, dueDate) => addTask({
                     title,
                     due_date: dueDate?.toISOString() || null,
                     project_id: null,
@@ -209,8 +210,18 @@ const AppContent = () => {
               />
             }
             />
-            <Route path="*" element={<NotFound />} /> {/* Catch-all route for 404 */}
+            <Route path="*" element={<NotFound />} />
           </Route>
+
+          {/* Redirect from old routes to new app routes */}
+          <Route path="/dashboard" element={<Navigate to="/app" replace />} />
+          <Route path="/tasks" element={<Navigate to="/app/tasks" replace />} />
+          <Route path="/focus" element={<Navigate to="/app/focus" replace />} />
+          <Route path="/notes" element={<Navigate to="/app/notes" replace />} />
+          <Route path="/calendar" element={<Navigate to="/app/calendar" replace />} />
+
+          {/* Catch all for 404 */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
@@ -219,10 +230,12 @@ const AppContent = () => {
 
 const App = () => {
   return (
-    // Provide the QueryClient to the entire application
-    <QueryClientProvider client={queryClient}>
-      <AppContent /> {/* Render the actual application content */}
-    </QueryClientProvider>
+    <ClerkProvider publishableKey={clerkPubKey}>
+      {/* Provide the QueryClient to the entire application */}
+      <QueryClientProvider client={queryClient}>
+        <AppContent />
+      </QueryClientProvider>
+    </ClerkProvider>
   );
 };
 
