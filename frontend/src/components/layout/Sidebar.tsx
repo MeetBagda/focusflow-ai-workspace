@@ -5,6 +5,7 @@ import { Calendar, CheckSquare, Clock, FileText, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "./ThemeToggle";
 import { Button } from "@/components/ui/button";
+import { UserButton } from "@clerk/clerk-react";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -84,7 +85,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
         </ul>
       </nav>
 
-      <div className="p-4 border-t border-border flex items-center justify-center">
+       <div
+        className={cn(
+          "p-4 border-t border-border flex items-center justify-center",
+          collapsed ? "flex-col gap-4" : "flex-row gap-7"
+        )}
+      >
+        <UserButton />
         <ThemeToggle />
       </div>
     </aside>
