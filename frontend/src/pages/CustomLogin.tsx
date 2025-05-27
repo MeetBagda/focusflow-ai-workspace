@@ -1,15 +1,23 @@
-import React, { useState } from 'react';
-import { useSignIn } from '@clerk/clerk-react';
+import React, { useState, useEffect } from 'react';
+import { useSignIn, useAuth } from '@clerk/clerk-react'; // Import useAuth
 import { useNavigate } from 'react-router-dom';
 
 const CustomLogin: React.FC = () => {
   const { signIn, isLoaded, setActive } = useSignIn();
+  const { isSignedIn } = useAuth(); // Get isSignedIn status
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Redirect if already signed in
+  useEffect(() => {
+    if (isSignedIn) {
+      navigate('/app'); // Redirect to dashboard if already logged in
+    }
+  }, [isSignedIn, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +36,7 @@ const CustomLogin: React.FC = () => {
       // If the sign-in is complete, set the active session and navigate
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
-        navigate('/dashboard'); // Navigate to the dashboard upon successful login
+        navigate('/app'); // Navigate to the dashboard upon successful login
       } else {
         // Log unexpected statuses for debugging
         console.log('Unexpected status:', result);
@@ -51,12 +59,17 @@ const CustomLogin: React.FC = () => {
       await signIn.authenticateWithRedirect({
         strategy,
         redirectUrl: '/sso-callback', // This URL should be configured in your Clerk application
-        redirectUrlComplete: '/dashboard', // Where to go after successful sign-in
+        redirectUrlComplete: '/app', // Where to go after successful sign-in
       });
     } catch (err: any) {
       setError(err.errors?.[0]?.message || 'Something went wrong with social login');
     }
   };
+
+  // Only render the login form if Clerk is loaded and user is not signed in
+  if (!isLoaded || isSignedIn) {
+    return null; // Or a loading spinner if needed
+  }
 
   return (
     // Main container with dark background from the UI
