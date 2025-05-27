@@ -29,8 +29,7 @@ const NoteList: React.FC<NoteListProps> = ({
   return (
     <div className="flex flex-col h-full">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-medium">My Notes</h2>
-        <Button onClick={onNewNote} size="sm">New Note</Button>
+       
       </div>
 
       <div className="overflow-y-auto flex-1">

@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react"; // Import useMemo and useCallback
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button"; 
+import { Button } from "@/components/ui/button";
 import AddTaskForm from "@/components/tasks/AddTaskForm";
 import TaskList from "@/components/tasks/TaskList";
 import { Task } from "@/types/task";
@@ -9,13 +9,13 @@ import ProjectSelector from "@/components/projects/ProjectSelector";
 import ProjectForm from "@/components/projects/ProjectForm";
 import ProjectSidebar from "@/components/projects/ProjectSidebar";
 import { useToast } from "@/components/ui/use-toast";
-import { apiClient } from "@/lib/client";
-import { taskApi } from "@/lib/tasks";
+import { apiClient } from "@/lib/client"; // Keep apiClient if used elsewhere in the app
+import { taskApi } from "@/lib/tasks"; // Keep taskApi if used elsewhere in the app
 
 interface TasksProps {
   tasks: Task[];
   projects: Project[];
-  onAddTask: (task: Partial<Task>) => void;  // Changed to match how it's called
+  onAddTask: (task: Partial<Task>) => void;
   onToggleComplete: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onUpdateTask: (id: string, updates: Partial<Task>) => void;
@@ -43,93 +43,116 @@ const Tasks: React.FC<TasksProps> = ({
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const { toast } = useToast();
 
-  // Get today's date (without time)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Memoize date calculations to prevent re-calculation on every render
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []); // Only runs once
 
-  // Get tomorrow's date
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrow = useMemo(() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 1);
+    d.setHours(0, 0, 0, 0); // Ensure tomorrow is also set to start of day
+    return d;
+  }, [today]); // Recalculates only if 'today' changes
 
-  // Get end of current week
-  const endOfWeek = new Date(today);
-  const dayOfWeek = today.getDay();
-  const daysUntilEndOfWeek = 6 - dayOfWeek;
-  endOfWeek.setDate(today.getDate() + daysUntilEndOfWeek);
+  const endOfWeek = useMemo(() => {
+    const d = new Date(today);
+    const dayOfWeek = today.getDay(); // 0 for Sunday, 6 for Saturday
+    const daysUntilEndOfWeek = 6 - dayOfWeek; // Days until next Saturday
+    d.setDate(today.getDate() + daysUntilEndOfWeek);
+    d.setHours(23, 59, 59, 999); // Set to end of the day for accurate range
+    return d;
+  }, [today]); // Recalculates only if 'today' changes
 
-  // Filter tasks based on active tab and current project
-  const filteredTasks = tasks.filter((task) => {
-    // First filter by project
-    if (currentProject && task.project_id !== currentProject.id) return false;
+  // Memoize filtered tasks to prevent re-filtering on every render
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      // First filter by project
+      if (currentProject && task.project_id !== currentProject.id) return false;
 
-    if (activeTab === "all") return true;
-    if (activeTab === "completed") return task.completed;
-    if (activeTab === "uncompleted") return !task.completed;
+      if (activeTab === "all") return true;
+      if (activeTab === "completed") return task.completed;
+      if (activeTab === "uncompleted") return !task.completed;
 
-    if (!task.due_date) return activeTab === "no-date";
+      if (!task.due_date) return activeTab === "no-date";
 
-    const due_date = new Date(task.due_date);
-    due_date.setHours(0, 0, 0, 0);
+      const due_date = new Date(task.due_date);
+      due_date.setHours(0, 0, 0, 0); // Normalize due_date to start of day for comparison
 
-    if (activeTab === "today") return due_date.getTime() === today.getTime();
-    if (activeTab === "tomorrow") return due_date.getTime() === tomorrow.getTime();
-    if (activeTab === "this-week") {
-      return due_date > today && due_date <= endOfWeek;
-    }
-    return false;
-  });
+      if (activeTab === "today") return due_date.getTime() === today.getTime();
+      if (activeTab === "tomorrow") return due_date.getTime() === tomorrow.getTime();
+      if (activeTab === "this-week") {
+        // For "this-week", tasks should be due from 'today' up to 'endOfWeek' (inclusive)
+        return due_date.getTime() >= today.getTime() && due_date.getTime() <= endOfWeek.getTime();
+      }
+      return false;
+    });
+  }, [tasks, currentProject, activeTab, today, tomorrow, endOfWeek]); // Dependencies for memoization
 
-  // Calculate task counts by project for the sidebar
-  const projectsWithCounts: ProjectWithTaskCount[] = projects.map(project => ({
-    ...project,
-    taskCount: (tasks || []).filter(task => task.project_id === project.id).length
-  }));
+  // Memoize task counts by project for the sidebar
+  const projectsWithCounts: ProjectWithTaskCount[] = useMemo(() => {
+    return projects.map(project => ({
+      ...project,
+      taskCount: (tasks || []).filter(task => task.project_id === project.id).length
+    }));
+  }, [projects, tasks]); // Recalculate only if 'projects' or 'tasks' change
 
-  // Handle adding a new task
-  const handleAddTask = async (title: string, dueDate: Date | null) => {
+  // Use useCallback for event handlers to prevent unnecessary re-renders of child components
+  const handleAddTask = useCallback(async (title: string, dueDate: Date | null) => {
     const taskData = {
       title,
       due_date: dueDate?.toISOString() || null,
       project_id: currentProject?.id || null,
       completed: false,
-      priority: "high",
-      is_recurring: false,
-      description: null
+      priority: "high", // Default priority
+      is_recurring: false, // Default recurring status
+      description: null // Default description
     };
-    
-  console.log('Creating task with data:', taskData); // Debug log
-   const response = await taskApi.createTask(taskData); // Send POST request to tasks endpoint
-   const createdTask = response.data; // Extract the created task from response
-  onAddTask(taskData); 
-  };
 
-  // Handle moving a task to a different project
-  const handleMoveTask = (taskId: string, projectId: string) => {
+    console.log('Creating task with data:', taskData); // Debug log
+    try {
+      const response = await taskApi.createTask(taskData); // Send POST request to tasks endpoint
+      const createdTask = response.data; // Extract the created task from response
+      onAddTask(createdTask); // Use the createdTask from the API response
+      toast({
+        title: "Task added",
+        description: `Task '${title}' has been added.`,
+      });
+    } catch (error) {
+      console.error("Error adding task:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add task. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [currentProject, onAddTask, toast]); // Dependencies for useCallback
+
+  const handleMoveTask = useCallback((taskId: string, projectId: string) => {
     onUpdateTask(taskId, { project_id: Number(projectId) });
     toast({
       title: "Task moved",
       description: `Task moved to ${projects.find(p => p.id === Number(projectId))?.name || 'another project'}`,
     });
-  };
+  }, [onUpdateTask, projects, toast]);
 
-  // Handle adding a new project
-  const handleAddProject = (projectData: Omit<Project, 'id' | 'createdAt'>) => {
+  const handleAddProject = useCallback((projectData: Omit<Project, 'id' | 'createdAt'>) => {
     onAddProject(projectData);
     toast({
       title: "Project created",
       description: `Project '${projectData.name}' has been created`,
     });
-  };
+  }, [onAddProject, toast]);
 
-  // Handle opening the project form for editing
-  const handleEditProject = () => {
+  const handleEditProject = useCallback(() => {
     if (!currentProject) return;
     setEditingProject(currentProject);
     setIsProjectFormOpen(true);
-  };
+  }, [currentProject]);
 
-  // Handle updating a project
-  const handleUpdateProject = (projectData: Omit<Project, 'id' | 'createdAt'>) => {
+  const handleUpdateProject = useCallback((projectData: Omit<Project, 'id' | 'createdAt'>) => {
     if (!editingProject) return;
     onUpdateProject(editingProject.id, projectData);
     toast({
@@ -137,10 +160,9 @@ const Tasks: React.FC<TasksProps> = ({
       description: `Project '${projectData.name}' has been updated`,
     });
     setEditingProject(null);
-  };
+  }, [editingProject, onUpdateProject, toast]);
 
-  // Handle deleting a project
-  const handleDeleteProject = () => {
+  const handleDeleteProject = useCallback(() => {
     if (!currentProject) return;
     onDeleteProject(currentProject.id);
     setCurrentProject(null);
@@ -148,16 +170,16 @@ const Tasks: React.FC<TasksProps> = ({
       title: "Project deleted",
       description: `Project '${currentProject.name}' has been deleted`,
     });
-  };
+  }, [currentProject, onDeleteProject, toast]);
 
   return (
     <div className="flex flex-col md:flex-row md:gap-6">
       {/* Project sidebar - visible on medium screens and up */}
-      <div className="hidden md:block w-64 border-r">
+      <div className="hidden md:block w-64 border-r border-border bg-card rounded-lg"> {/* Added bg-card for consistent styling */}
         <ProjectSidebar
           projects={projectsWithCounts}
           currentproject_id={currentProject?.id || null}
-          onSelectProject={(projectId) => 
+          onSelectProject={(projectId) =>
             setCurrentProject(projectId ? projects.find(p => p.id === Number(projectId)) || null : null)
           }
           onAddProject={() => {
@@ -172,7 +194,7 @@ const Tasks: React.FC<TasksProps> = ({
           <h1 className="text-3xl font-semibold mb-2">
             {currentProject ? currentProject.name : "All Tasks"}
           </h1>
-          
+
           {/* Project selector for mobile */}
           <div className="md:hidden mb-6">
             <ProjectSelector
@@ -192,9 +214,9 @@ const Tasks: React.FC<TasksProps> = ({
               <Button variant="outline" size="sm" onClick={handleEditProject}>
                 Edit Project
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="text-red-500"
                 onClick={handleDeleteProject}
               >
@@ -202,7 +224,7 @@ const Tasks: React.FC<TasksProps> = ({
               </Button>
             </div>
           )}
-          
+
           <AddTaskForm onAddTask={handleAddTask} />
         </div>
 
@@ -234,7 +256,7 @@ const Tasks: React.FC<TasksProps> = ({
       </div>
 
       {/* Project form dialog */}
-      <ProjectForm 
+      <ProjectForm
         open={isProjectFormOpen}
         onOpenChange={setIsProjectFormOpen}
         onSave={editingProject ? handleUpdateProject : handleAddProject}

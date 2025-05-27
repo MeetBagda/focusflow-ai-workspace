@@ -40,13 +40,13 @@ const queryClient = new QueryClient({
  * This component is rendered as a child of QueryClientProvider to ensure the context is available.
  */
 const AppContent = () => {
-  const { 
-    tasks, 
+  const {
+    tasks,
     tasksLoading,
     addTask,
     updateTask,
     deleteTask,
-    duplicateTask 
+    duplicateTask
   } = useTasks();
 
   const {
@@ -70,22 +70,28 @@ const AppContent = () => {
     // Handler for adding a quick task
     const handleQuickAddTask = (event: Event) => {
       const { title, dueDate, projectId } = (event as CustomEvent).detail;
+      // Normalize dueDate to start of the day before saving
+      const normalizedDueDate = dueDate ? new Date(dueDate) : null;
+      if (normalizedDueDate) {
+        normalizedDueDate.setHours(0, 0, 0, 0);
+      }
+
       addTask({
         title,
-        due_date: dueDate?.toISOString(),
+        due_date: normalizedDueDate?.toISOString() || null,
         project_id: projectId || null,
         completed: false,
         priority: "high",
         is_recurring: false,
         description: null,
-        id: 0,
+        id: 0, // Placeholder, actual ID should come from backend
         reminder: "",
         recurrence_pattern: "",
         created_at: "",
         updated_at: ""
       });
     };
-    
+
     // Handler for adding a quick note
     const handleQuickAddNote = (event: Event) => {
       const { title, content } = (event as CustomEvent).detail;
@@ -93,16 +99,16 @@ const AppContent = () => {
         title,
         content,
         project_id: null,
-        id: 0,
+        id: 0, // Placeholder, actual ID should come from backend
         created_at: "",
         updated_at: ""
       });
     };
-    
+
     // Add event listeners for custom app events
     document.addEventListener("app:addTask", handleQuickAddTask);
     document.addEventListener("app:addNote", handleQuickAddNote);
-    
+
     // Cleanup function to remove event listeners when the component unmounts
     return () => {
       document.removeEventListener("app:addTask", handleQuickAddTask);
@@ -143,9 +149,9 @@ const AppContent = () => {
                   tasks={tasks || []}
                   notes={notes || []}
                   projects={(projects || []).map(p => ({ id: String(p.id), name: p.name }))}
-                  onToggleTaskComplete={(id) => updateTask({ 
-                    id: Number(id), 
-                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed } 
+                  onToggleTaskComplete={(id) => updateTask({
+                    id: Number(id),
+                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed }
                   })}
                   onDeleteTask={(id) => deleteTask(Number(id))}
                 />
@@ -158,9 +164,9 @@ const AppContent = () => {
                   tasks={tasks || []}
                   projects={projects || []}
                   onAddTask={addTask}
-                  onToggleComplete={(id) => updateTask({ 
-                    id: Number(id), 
-                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed } 
+                  onToggleComplete={(id) => updateTask({
+                    id: Number(id),
+                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed }
                   })}
                   onDeleteTask={(id) => deleteTask(Number(id))}
                   onUpdateTask={(id, updates) => updateTask({ id: Number(id), data: updates })}
@@ -183,32 +189,41 @@ const AppContent = () => {
               }
             />
             <Route
-            path="calendar"
-            element={
-              <Calendar 
-                tasks={tasks || []}
-                projects={(projects || []).map(p => ({ id: String(p.id), name: p.name }))}
-                onToggleComplete={(id) => updateTask({ 
-                    id: Number(id), 
-                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed } 
+              path="calendar"
+              element={
+                <Calendar
+                  tasks={tasks || []}
+                  projects={(projects || []).map(p => ({ id: String(p.id), name: p.name }))}
+                  onToggleComplete={(id) => updateTask({
+                    id: Number(id),
+                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed }
                   })}
                   onDeleteTask={(id) => deleteTask(Number(id))}
-                   onAddTask={(title, dueDate) => addTask({
-                    title,
-                    due_date: dueDate?.toISOString() || null,
-                    project_id: null,
-                    completed: false,
-                    priority: "high",
-                    is_recurring: false,
-                    id: 0,
-                    description: "",
-                    reminder: "",
-                    recurrence_pattern: "",
-                    created_at: "",
-                    updated_at: ""
-                  })}
-              />
-            }
+                  onAddTask={(title, dueDate) => {
+                    // Normalize dueDate to start of the day before saving
+                    const normalizedDueDate = dueDate ? new Date(dueDate) : null;
+                    if (normalizedDueDate) {
+                      normalizedDueDate.setHours(0, 0, 0, 0);
+                    }
+                    addTask({
+                      title,
+                      due_date: normalizedDueDate?.toISOString() || null,
+                      project_id: null,
+                      completed: false,
+                      priority: "high",
+                      is_recurring: false,
+                      id: 0, // Placeholder, actual ID should come from backend
+                      description: "",
+                      reminder: "",
+                      recurrence_pattern: "",
+                      created_at: "",
+                      updated_at: ""
+                    });
+                  }}
+                  onUpdateTask={(id, updates) => updateTask({ id: Number(id), data: updates })}
+                  onDuplicateTask={duplicateTask}
+                />
+              }
             />
             <Route path="*" element={<NotFound />} />
           </Route>
