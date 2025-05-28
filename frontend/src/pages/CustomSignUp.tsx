@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { useSignUp } from '@clerk/clerk-react';
+import React, { useState, useEffect } from 'react';
+import { useSignUp, useAuth } from '@clerk/clerk-react'; // Import useAuth
 import { useNavigate } from 'react-router-dom';
 
 const CustomSignUp: React.FC = () => {
   // Destructure signUp and isLoaded from useSignUp hook
   // setActive is also available from useSignUp to set the active session after sign-up
   const { signUp, isLoaded, setActive } = useSignUp();
+  const { isSignedIn } = useAuth(); // Get isSignedIn status
   const navigate = useNavigate();
 
   // State variables for form inputs, error messages, and loading status
@@ -15,6 +16,13 @@ const CustomSignUp: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [pendingVerification, setPendingVerification] = useState(false); // State for email verification
+
+  // Redirect if already signed in
+  useEffect(() => {
+    if (isSignedIn) {
+      navigate('/app'); // Redirect to dashboard if already logged in
+    }
+  }, [isSignedIn, navigate]);
 
   // Function to handle the sign-up form submission
   const handleSignUp = async (e: React.FormEvent) => {
@@ -43,7 +51,7 @@ const CustomSignUp: React.FC = () => {
       if (result.status === 'complete') {
         // If sign-up is complete, set the active session and navigate to dashboard
         await setActive({ session: result.createdSessionId });
-        navigate('/dashboard');
+        navigate('/app');
       } else if ((result.status as string) === 'needs_email_verification') { // Added type assertion here
         // If email verification is required, send a verification email
         await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
@@ -72,7 +80,7 @@ const CustomSignUp: React.FC = () => {
       await signUp.authenticateWithRedirect({
         strategy,
         redirectUrl: '/sso-callback', // This URL should be configured in your Clerk application
-        redirectUrlComplete: '/dashboard', // Where to go after successful sign-up
+        redirectUrlComplete: '/app', // Where to go after successful sign-up
       });
     } catch (err: any) {
       setError(err.errors?.[0]?.message || 'Something went wrong with social sign-up');
@@ -97,6 +105,11 @@ const CustomSignUp: React.FC = () => {
         </div>
       </div>
     );
+  }
+
+  // Only render the signup form if Clerk is loaded and user is not signed in
+  if (!isLoaded || isSignedIn) {
+    return null; // Or a loading spinner if needed
   }
 
   return (
