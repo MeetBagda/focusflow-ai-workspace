@@ -14,11 +14,11 @@ interface SidebarProps {
 // Define navItems outside the component to prevent re-creation on every render.
 // This is a micro-optimization for static data.
 const navItems = [
-  { name: "Dashboard", href: "/", icon: Home },
-  { name: "Tasks", href: "/tasks", icon: CheckSquare },
-  { name: "Focus", href: "/focus", icon: Clock },
-  { name: "Notes", href: "/notes", icon: FileText },
-  { name: "Calendar", href: "/calendar", icon: Calendar },
+  { name: "Dashboard", href: "/app/dashboard", icon: Home },
+  { name: "Tasks", href: "/app/tasks", icon: CheckSquare },
+  { name: "Focus", href: "/app/focus", icon: Clock },
+  { name: "Notes", href: "/app/notes", icon: FileText },
+  { name: "Calendar", href: "/app/calendar", icon: Calendar },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {

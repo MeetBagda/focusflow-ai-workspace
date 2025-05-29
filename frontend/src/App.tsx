@@ -144,6 +144,7 @@ const AppContent = () => {
           >
             <Route
               index
+              path="dashboard"
               element={
                 <Dashboard
                   tasks={tasks || []}
