@@ -1,206 +1,379 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { taskApi } from '@/lib/tasks';
-import { projectApi } from '@/lib/projects';
-import { noteApi } from '@/lib/notes';
-import { toast } from '@/components/ui/use-toast';
-import { Task } from '@/types/task';
-import { Project } from '@/types/project';
-import { Note } from '@/types/note';
+/**
+ * @fileoverview Custom React hooks for fetching and managing application data (Tasks, Projects, Notes).
+ * These hooks now utilize the centralized API service functions from '@/api', ensuring
+ * authenticated and user-isolated data operations.
+ */
 
-export const useTasks = () => {
-  const queryClient = useQueryClient();
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@clerk/clerk-react'; // Needed to check auth status for fetching
+import { toast } from '@/components/ui/use-toast'; // For displaying notifications
 
-  const { data: tasks, isLoading: tasksLoading } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: () => taskApi.getTasks().then(res => res.data)
-  });
+// Import the new API service hooks
+import { useTasksApi, useProjectsApi, useNotesApi } from '@/api';
 
-  const { mutate: addTask } = useMutation({
-  mutationFn: (task: Partial<Task>) => {
-    console.log('Raw incoming task to sanitize:', task);
+// Import your defined types
+import { Task, Project, Note } from '@/types';
 
-    // 🔥 Handle the wrongly nested case
-    // If task.title is itself an object with the full task inside it
-    if (typeof task.title === 'object' && task.title !== null && 'title' in task.title) {
-      task = { ...(task.title as Task) }; // Unwrap and overwrite `task`
-      console.warn("⚠️ Detected nested task data in title. Unwrapped it.", task);
+/**
+ * Custom hook for managing tasks.
+ * Provides functions for fetching, adding, updating, deleting, and duplicating tasks.
+ */
+export function useTasks() {
+  const { isSignedIn } = useAuth(); // Check if user is signed in
+  const { getTasks, createTask, updateTask, deleteTask, duplicateTask } = useTasksApi(); // Get API functions
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [tasksError, setTasksError] = useState<string | null>(null);
+
+  const fetchTasks = useCallback(async () => {
+    if (!isSignedIn) {
+      setTasksLoading(false);
+      setTasks([]);
+      return;
     }
-
-    // 🛑 Validate title
-    if (!task.title || typeof task.title !== 'string' || task.title.trim() === '') {
-      console.error("❌ Title is required to create a task.");
-      throw new Error("Title is required to create a task.");
-    }
-
-    const sanitizedTask = {
-      title: task.title.substring(0, 250),
-      description: typeof task.description === 'string' ? task.description.substring(0, 250) : null,
-      due_date: task.due_date || null,
-      priority: task.priority || 'medium',
-      project_id: task.project_id === 0 ? null : task.project_id,
-      is_recurring: Boolean(task.is_recurring),
-      completed: Boolean(task.completed),
-    };
-
-    console.log("✅ Sending sanitized task:", sanitizedTask);
-    return taskApi.createTask(sanitizedTask);
-  },
-  onSuccess: (data) => {
-    queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    toast({ title: "Task created successfully" });
-  },
-  onError: (error: any) => {
-    console.error('Error creating task:', error);
-    toast({
-      title: "Failed to create task",
-      description: error.response?.data?.error || error.message,
-      variant: "destructive",
-    });
-  }
-});
-
-
-  const { mutate: updateTask } = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Task> }) => {
-      // Sanitize update data as well
-      const sanitizedData: Partial<Task> = {};
-      
-      if (data.title !== undefined) 
-        sanitizedData.title = String(data.title).substring(0, 250);
-      
-      if (data.description !== undefined)
-        sanitizedData.description = data.description ? String(data.description).substring(0, 250) : null;
-      
-      if (data.due_date !== undefined)
-        sanitizedData.due_date = data.due_date;
-      
-      if (data.priority !== undefined)
-        sanitizedData.priority = data.priority;
-      
-      if (data.project_id !== undefined)
-        sanitizedData.project_id = data.project_id === 0 ? null : data.project_id;
-      
-      if (data.is_recurring !== undefined)
-        sanitizedData.is_recurring = Boolean(data.is_recurring);
-      
-      if (data.completed !== undefined)
-        sanitizedData.completed = Boolean(data.completed);
-      
-      return taskApi.updateTask(id, sanitizedData);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast({ title: "Task updated successfully" });
-    },
-    onError: (error: any) => {
-      toast({ 
-        title: "Failed to update task", 
-        description: error.response?.data?.error || error.message,
-        variant: "destructive"
+    setTasksLoading(true);
+    setTasksError(null);
+    try {
+      const data = await getTasks();
+      setTasks(data);
+    } catch (error: any) {
+      console.error("Failed to fetch tasks:", error);
+      setTasksError(error.message || "Failed to fetch tasks.");
+      toast({
+        title: "Error",
+        description: `Failed to load tasks: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
       });
+    } finally {
+      setTasksLoading(false);
     }
-  });
+  }, [isSignedIn, getTasks, toast]);
 
-  // The rest of your code remains unchanged
-  const { mutate: deleteTask } = useMutation({
-    mutationFn: taskApi.deleteTask,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast({ title: "Task deleted successfully" });
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
+  const addTask = useCallback(async (taskData: Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
+    try {
+      const newTask = await createTask(taskData);
+      setTasks(prevTasks => [...prevTasks, newTask]);
+      toast({
+        title: "Success",
+        description: `Task "${newTask.title}" added.`,
+      });
+      return newTask;
+    } catch (error: any) {
+      console.error("Failed to add task:", error);
+      setTasksError(error.message || "Failed to add task.");
+      toast({
+        title: "Error",
+        description: `Failed to add task: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+      throw error; // Re-throw to allow component to handle
     }
-  });
+  }, [createTask, toast]);
 
-  const { mutate: duplicateTask } = useMutation({
-    mutationFn: (task: Omit<Task, 'id'>) => {
-      // Sanitize the duplicated task
-      const sanitizedTask = {
-        ...task,
-        title: `${task.title} (Copy)`.substring(0, 250),
-        description: task.description ? String(task.description).substring(0, 250) : null,
-        id: 0
-      };
-      return taskApi.createTask(sanitizedTask);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast({ title: "Task duplicated successfully" });
+  const updateTaskById = useCallback(async (id: number, updates: Partial<Task>) => {
+    try {
+      const updatedTask = await updateTask(id, updates);
+      setTasks(prevTasks => prevTasks.map(task =>
+        task.id === updatedTask.id ? updatedTask : task
+      ));
+      toast({
+        title: "Success",
+        description: `Task "${updatedTask.title}" updated.`,
+      });
+      return updatedTask;
+    } catch (error: any) {
+      console.error("Failed to update task:", error);
+      setTasksError(error.message || "Failed to update task.");
+      toast({
+        title: "Error",
+        description: `Failed to update task: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+      throw error;
     }
-  });
+  }, [updateTask, toast]);
 
-  return { tasks, tasksLoading, addTask, updateTask, deleteTask, duplicateTask };
-};
-
-export const useProjects = () => {
-  const queryClient = useQueryClient();
-
-  const { data: projects, isLoading: projectsLoading } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => projectApi.getProjects().then(res => res.data)
-  });
-
-  const { mutate: addProject } = useMutation({
-    mutationFn: projectApi.createProject,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      toast({ title: "Project created successfully" });
+  const deleteTaskById = useCallback(async (id: number) => {
+    try {
+      await deleteTask(id);
+      setTasks(prevTasks => prevTasks.filter(task => task.id !== id));
+      toast({
+        title: "Success",
+        description: "Task deleted.",
+      });
+    } catch (error: any) {
+      console.error("Failed to delete task:", error);
+      setTasksError(error.message || "Failed to delete task.");
+      toast({
+        title: "Error",
+        description: `Failed to delete task: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+      throw error;
     }
-  });
+  }, [deleteTask, toast]);
 
-  const { mutate: updateProject } = useMutation({
-  mutationFn: ({ id, data }: { id: number; data: Partial<Project> }) => // This is the single argument passed to `mutate`
-    projectApi.updateProject(id, data as Project), // Pass them as two separate arguments to your API call
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['projects'] });
-    queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    toast({ title: "Project updated successfully" });
-  }
-});
-
-
-  const { mutate: deleteProject } = useMutation({
-    mutationFn: projectApi.deleteProject,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['tasks'] }); // Refresh tasks as some might be deleted
-      toast({ title: "Project deleted successfully" });
+  const duplicateTaskById = useCallback(async (task: Task) => {
+    try {
+      const duplicated = await duplicateTask(task);
+      setTasks(prevTasks => [...prevTasks, duplicated]);
+      toast({
+        title: "Success",
+        description: `Task "${duplicated.title}" duplicated.`,
+      });
+      return duplicated;
+    } catch (error: any) {
+      console.error("Failed to duplicate task:", error);
+      setTasksError(error.message || "Failed to duplicate task.");
+      toast({
+        title: "Error",
+        description: `Failed to duplicate task: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+      throw error;
     }
-  });
+  }, [duplicateTask, toast]);
 
-  return { projects, projectsLoading, addProject, updateProject, deleteProject };
-};
+  return {
+    tasks,
+    tasksLoading,
+    tasksError,
+    addTask,
+    updateTask: updateTaskById, // Renamed to avoid conflict with imported updateTask
+    deleteTask: deleteTaskById, // Renamed to avoid conflict with imported deleteTask
+    duplicateTask: duplicateTaskById, // Renamed to avoid conflict with imported duplicateTask
+    refetchTasks: fetchTasks, // Provide a way to manually refetch
+  };
+}
 
-export const useNotes = () => {
-  const queryClient = useQueryClient();
+/**
+ * Custom hook for managing projects.
+ * Provides functions for fetching, adding, updating, and deleting projects.
+ */
+export function useProjects() {
+  const { isSignedIn } = useAuth();
+  const { getProjects, createProject, updateProject, deleteProject } = useProjectsApi();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
 
-  const { data: notes, isLoading: notesLoading } = useQuery({
-    queryKey: ['notes'],
-    queryFn: () => noteApi.getNotes().then(res => res.data)
-  });
-
-  const { mutate: addNote } = useMutation({
-    mutationFn: noteApi.createNote,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notes'] });
-      toast({ title: "Note created successfully" });
+  const fetchProjects = useCallback(async () => {
+    if (!isSignedIn) {
+      setProjectsLoading(false);
+      setProjects([]);
+      return;
     }
-  });
-
-  const { mutate: updateNote } = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Note> }) => 
-      noteApi.updateNote(id, data as Note),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notes'] });
-      toast({ title: "Note updated successfully" });
+    setProjectsLoading(true);
+    setProjectsError(null);
+    try {
+      const data = await getProjects();
+      setProjects(data);
+    } catch (error: any) {
+      console.error("Failed to fetch projects:", error);
+      setProjectsError(error.message || "Failed to fetch projects.");
+      toast({
+        title: "Error",
+        description: `Failed to load projects: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+    } finally {
+      setProjectsLoading(false);
     }
-  });
+  }, [isSignedIn, getProjects, toast]);
 
-  const { mutate: deleteNote } = useMutation({
-    mutationFn: noteApi.deleteNote,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notes'] });
-      toast({ title: "Note deleted successfully" });
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
+  const addProject = useCallback(async (projectData: Omit<Project, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
+    try {
+      const newProject = await createProject(projectData);
+      setProjects(prevProjects => [...prevProjects, newProject]);
+      toast({
+        title: "Success",
+        description: `Project "${newProject.name}" created.`,
+      });
+      return newProject;
+    } catch (error: any) {
+      console.error("Failed to add project:", error);
+      setProjectsError(error.message || "Failed to add project.");
+      toast({
+        title: "Error",
+        description: `Failed to add project: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+      throw error;
     }
-  });
+  }, [createProject, toast]);
 
-  return { notes, notesLoading, addNote, updateNote, deleteNote };
-};
+  const updateProjectById = useCallback(async (id: number, updates: Partial<Project>) => {
+    try {
+      const updatedProject = await updateProject(id, updates);
+      setProjects(prevProjects => prevProjects.map(project =>
+        project.id === updatedProject.id ? updatedProject : project
+      ));
+      toast({
+        title: "Success",
+        description: `Project "${updatedProject.name}" updated.`,
+      });
+      return updatedProject;
+    } catch (error: any) {
+      console.error("Failed to update project:", error);
+      setProjectsError(error.message || "Failed to update project.");
+      toast({
+        title: "Error",
+        description: `Failed to update project: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  }, [updateProject, toast]);
+
+  const deleteProjectById = useCallback(async (id: number) => {
+    try {
+      await deleteProject(id);
+      setProjects(prevProjects => prevProjects.filter(project => project.id !== id));
+      toast({
+        title: "Success",
+        description: "Project deleted.",
+      });
+    } catch (error: any) {
+      console.error("Failed to delete project:", error);
+      setProjectsError(error.message || "Failed to delete project.");
+      toast({
+        title: "Error",
+        description: `Failed to delete project: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  }, [deleteProject, toast]);
+
+  return {
+    projects,
+    projectsLoading,
+    projectsError,
+    addProject,
+    updateProject: updateProjectById,
+    deleteProject: deleteProjectById,
+    refetchProjects: fetchProjects,
+  };
+}
+
+/**
+ * Custom hook for managing notes.
+ * Provides functions for fetching, adding, updating, and deleting notes.
+ */
+export function useNotes() {
+  const { isSignedIn } = useAuth();
+  const { getNotes, createNote, updateNote, deleteNote } = useNotesApi();
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [notesLoading, setNotesLoading] = useState(true);
+  const [notesError, setNotesError] = useState<string | null>(null);
+
+  const fetchNotes = useCallback(async () => {
+    if (!isSignedIn) {
+      setNotesLoading(false);
+      setNotes([]);
+      return;
+    }
+    setNotesLoading(true);
+    setNotesError(null);
+    try {
+      const data = await getNotes();
+      setNotes(data);
+    } catch (error: any) {
+      console.error("Failed to fetch notes:", error);
+      setNotesError(error.message || "Failed to fetch notes.");
+      toast({
+        title: "Error",
+        description: `Failed to load notes: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+    } finally {
+      setNotesLoading(false);
+    }
+  }, [isSignedIn, getNotes, toast]);
+
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]);
+
+  const addNote = useCallback(async (noteData: Omit<Note, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
+    try {
+      const newNote = await createNote(noteData);
+      setNotes(prevNotes => [...prevNotes, newNote]);
+      toast({
+        title: "Success",
+        description: `Note "${newNote.title}" created.`,
+      });
+      return newNote;
+    } catch (error: any) {
+      console.error("Failed to add note:", error);
+      setNotesError(error.message || "Failed to add note.");
+      toast({
+        title: "Error",
+        description: `Failed to add note: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  }, [createNote, toast]);
+
+  const updateNoteById = useCallback(async (id: number, updates: Partial<Note>) => {
+    try {
+      const updatedNote = await updateNote(id, updates);
+      setNotes(prevNotes => prevNotes.map(note =>
+        note.id === updatedNote.id ? updatedNote : note
+      ));
+      toast({
+        title: "Success",
+        description: `Note "${updatedNote.title}" updated.`,
+      });
+      return updatedNote;
+    } catch (error: any) {
+      console.error("Failed to update note:", error);
+      setNotesError(error.message || "Failed to update note.");
+      toast({
+        title: "Error",
+        description: `Failed to update note: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  }, [updateNote, toast]);
+
+  const deleteNoteById = useCallback(async (id: number) => {
+    try {
+      await deleteNote(id);
+      setNotes(prevNotes => prevNotes.filter(note => note.id !== id));
+      toast({
+        title: "Success",
+        description: "Note deleted.",
+      });
+    } catch (error: any) {
+      console.error("Failed to delete note:", error);
+      setNotesError(error.message || "Failed to delete note.");
+      toast({
+        title: "Error",
+        description: `Failed to delete note: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  }, [deleteNote, toast]);
+
+  return {
+    notes,
+    notesLoading,
+    notesError,
+    addNote,
+    updateNote: updateNoteById,
+    deleteNote: deleteNoteById,
+    refetchNotes: fetchNotes,
+  };
+}
