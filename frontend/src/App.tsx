@@ -6,20 +6,19 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-react";
 
-import AppLayout from "./components/layout/AppLayout";
-import Dashboard from "./pages/Dashboard";
-import Tasks from "./pages/Tasks";
-import Focus from "./pages/Focus";
-import Notes from "./pages/Notes";
-import Calendar from "./pages/Calendar";
-import NotFound from "./pages/NotFound";
-import LandingPage from "./pages/LandingPage";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
+import AppLayout from "./components/layout/AppLayout"; // Assuming this path remains
+import Dashboard from "./pages/Dashboard"; // Assuming this path remains
+import Tasks from "./pages/Tasks"; // Assuming this path remains
+import Focus from "./pages/Focus"; // Assuming this path remains
+import Notes from "./pages/Notes"; // Assuming this path remains
+import Calendar from "./pages/Calendar"; // Assuming this path remains
+import NotFound from "./pages/NotFound"; // Assuming this path remains
+import LandingPage from "./pages/LandingPage"; // Assuming this path remains
+import CustomLogin from "./features/auth/CustomLogin"; // Updated path for CustomLogin
+import CustomSignUp from "./features/auth/CustomSignUp"; // Updated path for CustomSignUp
 
-import { useTasks, useProjects, useNotes } from "@/hooks/useApi";
-import CustomLogin from "./pages/CustomLogin";
-import CustomSignUp from "./pages/CustomSignUp";
+import { useTasks, useProjects, useNotes } from "@/hooks/useApi"; // Import the updated useApi hooks
+import { Task, Note, Project } from "@/types"; // Import types for clarity
 
 // Get Clerk publishable key from environment variables
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -40,6 +39,7 @@ const queryClient = new QueryClient({
  * This component is rendered as a child of QueryClientProvider to ensure the context is available.
  */
 const AppContent = () => {
+  // Use the updated useApi hooks
   const {
     tasks,
     tasksLoading,
@@ -60,7 +60,7 @@ const AppContent = () => {
   const {
     notes,
     notesLoading,
-    addNote: saveNote,
+    addNote, // Renamed from saveNote for consistency with useNotes hook
     updateNote,
     deleteNote
   } = useNotes();
@@ -76,32 +76,28 @@ const AppContent = () => {
         normalizedDueDate.setHours(0, 0, 0, 0);
       }
 
+      // Call the addTask function from useTasks hook with correct type
       addTask({
         title,
-        due_date: normalizedDueDate?.toISOString() || null,
-        project_id: projectId || null,
-        completed: false,
+        description: null,
+        dueDate: normalizedDueDate?.toISOString() || null, // Use dueDate as per Task type
         priority: "high",
         is_recurring: false,
-        description: null,
-        id: 0, // Placeholder, actual ID should come from backend
-        reminder: "",
-        recurrence_pattern: "",
-        created_at: "",
-        updated_at: ""
+        completed: false,
+        reminder: null,
+        recurrence_pattern: null,
+        project_id: projectId || null,
       });
     };
 
     // Handler for adding a quick note
     const handleQuickAddNote = (event: Event) => {
       const { title, content } = (event as CustomEvent).detail;
-      saveNote({
+      // Call the addNote function from useNotes hook with correct type
+      addNote({
         title,
         content,
         project_id: null,
-        id: 0, // Placeholder, actual ID should come from backend
-        created_at: "",
-        updated_at: ""
       });
     };
 
@@ -114,133 +110,131 @@ const AppContent = () => {
       document.removeEventListener("app:addTask", handleQuickAddTask);
       document.removeEventListener("app:addNote", handleQuickAddNote);
     };
-  }, [addTask, saveNote]);
+  }, [addTask, addNote]); // Dependencies for useCallback
 
   // Show a loading indicator while data is being fetched
   if (tasksLoading || projectsLoading || notesLoading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen bg-background text-foreground">
+        Loading...
+      </div>
+    );
   }
 
   // Render the main application content once data is loaded
   return (
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<CustomLogin />} />
-          <Route path="/signup" element={<CustomSignUp />} />
+    <div className="h-screen overflow-hidden"> {/* Ensures the main container does not scroll itself */}
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<CustomLogin />} />
+            <Route path="/signup" element={<CustomSignUp />} />
 
-          {/* Protected routes - only accessible when signed in */}
-          <Route
-            path="/app/*"
-            element={
-              <SignedIn>
-                <AppLayout />
-              </SignedIn>
-            }
-          >
+            {/* Protected routes - only accessible when signed in */}
             <Route
-              index
-              path="dashboard"
+              path="/app/*"
               element={
-                <Dashboard
-                  tasks={tasks || []}
-                  notes={notes || []}
-                  projects={(projects || []).map(p => ({ id: String(p.id), name: p.name }))}
-                  onToggleTaskComplete={(id) => updateTask({
-                    id: Number(id),
-                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed }
-                  })}
-                  onDeleteTask={(id) => deleteTask(Number(id))}
-                />
+                <SignedIn>
+                  <AppLayout />
+                </SignedIn>
               }
-            />
-            <Route
-              path="tasks"
-              element={
-                <Tasks
-                  tasks={tasks || []}
-                  projects={projects || []}
-                  onAddTask={addTask}
-                  onToggleComplete={(id) => updateTask({
-                    id: Number(id),
-                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed }
-                  })}
-                  onDeleteTask={(id) => deleteTask(Number(id))}
-                  onUpdateTask={(id, updates) => updateTask({ id: Number(id), data: updates })}
-                  onDuplicateTask={duplicateTask}
-                  onAddProject={addProject}
-                  onUpdateProject={(id, updates) => updateProject({ id: Number(id), data: updates })}
-                  onDeleteProject={(id) => deleteProject(Number(id))}
-                />
-              }
-            />
-            <Route path="focus" element={<Focus />} />
-            <Route
-              path="notes"
-              element={
-                <Notes
-                  notes={notes || []}
-                  onSaveNote={saveNote}
-                  onDeleteNote={(id) => deleteNote(Number(id))}
-                />
-              }
-            />
-            <Route
-              path="calendar"
-              element={
-                <Calendar
-                  tasks={tasks || []}
-                  projects={(projects || []).map(p => ({ id: String(p.id), name: p.name }))}
-                  onToggleComplete={(id) => updateTask({
-                    id: Number(id),
-                    data: { completed: !tasks?.find(t => t.id === Number(id))?.completed }
-                  })}
-                  onDeleteTask={(id) => deleteTask(Number(id))}
-                  onAddTask={(title, dueDate) => {
-                    // Normalize dueDate to start of the day before saving
-                    const normalizedDueDate = dueDate ? new Date(dueDate) : null;
-                    if (normalizedDueDate) {
-                      normalizedDueDate.setHours(0, 0, 0, 0);
-                    }
-                    addTask({
-                      title,
-                      due_date: normalizedDueDate?.toISOString() || null,
-                      project_id: null,
-                      completed: false,
-                      priority: "high",
-                      is_recurring: false,
-                      id: 0, // Placeholder, actual ID should come from backend
-                      description: "",
-                      reminder: "",
-                      recurrence_pattern: "",
-                      created_at: "",
-                      updated_at: ""
-                    });
-                  }}
-                  onUpdateTask={(id, updates) => updateTask({ id: Number(id), data: updates })}
-                  onDuplicateTask={duplicateTask}
-                />
-              }
-            />
+            >
+              <Route
+                index
+                element={
+                  <Dashboard
+                    tasks={tasks || []}
+                    notes={notes || []}
+                    projects={(projects || []).map(p => ({ id: p.id, name: p.name }))} // Ensure project ID is number
+                    onToggleTaskComplete={(id) => updateTask(Number(id), { completed: !tasks?.find(t => t.id === Number(id))?.completed })}
+                    onDeleteTask={(id) => deleteTask(Number(id))}
+                  />
+                }
+              />
+              <Route
+                path="tasks"
+                element={
+                  <Tasks
+                    tasks={tasks || []}
+                    projects={projects || []}
+                    onAddTask={(taskData) => addTask(taskData as Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'>)}
+                    onToggleComplete={(id) => updateTask(Number(id), { completed: !tasks?.find(t => t.id === Number(id))?.completed })}
+                    onDeleteTask={(id) => deleteTask(Number(id))}
+                    onUpdateTask={(id, updates) => updateTask(Number(id), updates as Partial<Task>)}
+                    onDuplicateTask={(task) => duplicateTask(task)}
+                    onAddProject={(projectData) => addProject(projectData as Omit<Project, 'id' | 'user_id' | 'created_at' | 'updated_at'>)}
+                    onUpdateProject={(id, updates) => updateProject(Number(id), updates as Partial<Project>)}
+                    onDeleteProject={(id) => deleteProject(Number(id))}
+                  />
+                }
+              />
+              <Route path="focus" element={<Focus />} />
+              <Route
+                path="notes"
+                element={
+                  <Notes
+                    notes={notes || []}
+                    onSaveNote={(noteData) => {
+                      if (noteData.id) {
+                        updateNote(Number(noteData.id), noteData as Partial<Note>);
+                      } else {
+                        addNote(noteData as Omit<Note, 'id' | 'user_id' | 'created_at' | 'updated_at'>);
+                      }
+                    }}
+                    onDeleteNote={(id) => deleteNote(Number(id))}
+                  />
+                }
+              />
+              <Route
+                path="calendar"
+                element={
+                  <Calendar
+                    tasks={tasks || []}
+                    projects={(projects || []).map(p => ({ id: p.id, name: p.name }))} // Ensure project ID is number
+                    onToggleComplete={(id) => updateTask(Number(id), { completed: !tasks?.find(t => t.id === Number(id))?.completed })}
+                    onDeleteTask={(id) => deleteTask(Number(id))}
+                    onAddTask={(title, dueDate) => {
+                      const normalizedDueDate = dueDate ? new Date(dueDate) : null;
+                      if (normalizedDueDate) {
+                        normalizedDueDate.setHours(0, 0, 0, 0);
+                      }
+                      addTask({
+                        title,
+                        description: null,
+                        dueDate: normalizedDueDate?.toISOString() || null,
+                        priority: "high",
+                        is_recurring: false,
+                        completed: false,
+                        reminder: null,
+                        recurrence_pattern: null,
+                        project_id: null,
+                      });
+                    }}
+                    onUpdateTask={(id, updates) => updateTask(Number(id), updates as Partial<Task>)}
+                    onDuplicateTask={(task) => duplicateTask(task)}
+                  />
+                }
+              />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+
+            {/* Redirect from old routes to new app routes */}
+            <Route path="/dashboard" element={<Navigate to="/app" replace />} />
+            <Route path="/tasks" element={<Navigate to="/app/tasks" replace />} />
+            <Route path="/focus" element={<Navigate to="/app/focus" replace />} />
+            <Route path="/notes" element={<Navigate to="/app/notes" replace />} />
+            <Route path="/calendar" element={<Navigate to="/app/calendar" replace />} />
+
+            {/* Catch all for 404 */}
             <Route path="*" element={<NotFound />} />
-          </Route>
-
-          {/* Redirect from old routes to new app routes */}
-          <Route path="/dashboard" element={<Navigate to="/app" replace />} />
-          <Route path="/tasks" element={<Navigate to="/app/tasks" replace />} />
-          <Route path="/focus" element={<Navigate to="/app/focus" replace />} />
-          <Route path="/notes" element={<Navigate to="/app/notes" replace />} />
-          <Route path="/calendar" element={<Navigate to="/app/calendar" replace />} />
-
-          {/* Catch all for 404 */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </div>
   );
 };
 
