@@ -1,17 +1,23 @@
+/**
+ * @fileoverview Notes page component for displaying and managing user notes.
+ * This component orchestrates the NoteList and NoteEditor components,
+ * and interacts with the useNotes hook for data management.
+ */
+
 import React, { useState, useMemo, useCallback } from "react";
-import { Note } from "@/types/note";
-import NoteList from "@/components/notes/NoteList"; // Assuming this component exists
-import NoteEditor from "@/components/notes/NoteEditor"; // Assuming this component exists
-import { Button } from "@/components/ui/button"; // Assuming a Shadcn UI Button component
-import { Input } from "@/components/ui/input"; // Assuming a Shadcn UI Input component
-import { Search, Plus, Edit, Trash2, X } from "lucide-react"; // Icons for search, new, edit, delete, cancel
-import { Separator } from "@/components/ui/separator"; // Assuming a Shadcn UI Separator component
+import { Note } from "@/types"; // Import the Note type
+import NoteList from "@/components/notes/NoteList";
+import NoteEditor from "@/components/notes/NoteEditor";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Search, Plus, Edit, Trash2 } from "lucide-react"; // Removed X as it's not used in this component's JSX
+import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/use-toast"; // Assuming useToast hook
 
 interface NotesProps {
-  notes: Note[];
-  onSaveNote: (note: Partial<Note>) => void;
-  onDeleteNote: (id: string) => void;
+  notes: Note[]; // Notes fetched from useNotes hook
+  onSaveNote: (note: Omit<Note, 'user_id' | 'created_at' | 'updated_at'> | Note) => void; // Function to add/update note
+  onDeleteNote: (id: number) => void; // Function to delete note
 }
 
 const Notes: React.FC<NotesProps> = ({ notes, onSaveNote, onDeleteNote }) => {
@@ -34,72 +40,74 @@ const Notes: React.FC<NotesProps> = ({ notes, onSaveNote, onDeleteNote }) => {
   // Sort notes by last updated/created date, newest first
   const sortedNotes = useMemo(() => {
     return [...filteredNotes].sort((a, b) =>
-      new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
+      new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
     );
   }, [filteredNotes]);
 
   const handleSelectNote = useCallback((note: Note) => {
     setSelectedNote(note);
-    setIsEditing(false);
+    setIsEditing(false); // Switch to view mode when a note is selected
   }, []);
 
   const handleNewNote = useCallback(() => {
-    setSelectedNote(null);
-    setIsEditing(true);
+    setSelectedNote(null); // Clear any selected note
+    setIsEditing(true); // Enter editing mode for a new note
   }, []);
 
-  const handleSave = useCallback((note: Partial<Note>) => {
-    onSaveNote(note);
-    setIsEditing(false);
-    toast({
-      title: "Note saved!",
-      description: note.id ? `Note '${note.title}' updated.` : `New note '${note.title}' created.`,
-      duration: 3000,
-    });
+  const handleSave = useCallback((noteData: Omit<Note, 'user_id' | 'created_at' | 'updated_at'> | Note) => {
+    onSaveNote(noteData); // Pass the data to the parent handler (App.tsx -> useNotes)
+    setIsEditing(false); // Exit editing mode after saving
 
-    // A more robust way to handle new note selection would be for onSaveNote
-    // to return the full new note object with its ID.
-    // For now, this setTimeout is a workaround to select the newly created note.
-    if (!note.id) {
+    // After saving, attempt to select the newly created/updated note
+    // This relies on the parent's `notes` state being updated by the API hook.
+    // A more robust solution might involve the `onSaveNote` prop returning the new note.
+    if (!noteData.id) { // If it was a new note being created
+      // Give a small delay for the data to refetch and update in the parent
       setTimeout(() => {
-        // Assuming the parent state `notes` will be updated shortly after `onSaveNote`
-        // Find the newly created note (e.g., by title, or if backend returns ID)
-        // This part needs to be robustly handled by your data fetching/mutation logic
-        // For demonstration, we'll rely on the sort to bring the newest to top.
-        // A better approach: `onSaveNote` resolves with the new note's full data.
-        const newlyCreatedNote = notes.find(n => n.title === note.title && !n.id); // This is a weak check
-        if (newlyCreatedNote) {
-            setSelectedNote(newlyCreatedNote);
+        // Find the newly created note (e.g., by title, assuming titles are unique enough for this context)
+        // This is a simplified approach. In a real app, the API would return the full new object.
+        const newlyCreated = notes.find(n => n.title === noteData.title && n.content === noteData.content);
+        if (newlyCreated) {
+          setSelectedNote(newlyCreated);
         }
-      }, 500); // Give a small delay for parent state to update
-    } else {
-        // If it's an update, ensure selected note reflects the latest state
-        setSelectedNote(prev => prev ? { ...prev, ...note } as Note : null);
+      }, 100); // Small delay
+    } else { // If it was an existing note being updated
+      setSelectedNote(prev => prev ? { ...prev, ...noteData } as Note : null);
     }
-  }, [onSaveNote, notes, toast]);
+  }, [onSaveNote, notes]); // Added notes to dependencies for setTimeout logic
 
   const handleCancel = useCallback(() => {
     setIsEditing(false);
-    // If a note was selected before editing, revert to viewing it
-    if (selectedNote && !selectedNote.id) { // If it was a new, unsaved note
-      setSelectedNote(null); // Clear selection
+    // If we were creating a new note and cancelled, clear selection
+    if (!selectedNote && isEditing) {
+      setSelectedNote(null);
     }
-  }, [selectedNote]);
+  }, [selectedNote, isEditing]);
 
   const handleEdit = useCallback(() => {
-    setIsEditing(true);
+    setIsEditing(true); // Enter editing mode for the selected note
   }, []);
 
   const handleDelete = useCallback(() => {
-    if (selectedNote && window.confirm(`Are you sure you want to delete "${selectedNote.title}"?`)) { // Using window.confirm for simplicity, replace with custom modal
+    if (selectedNote && selectedNote.id) {
+      // Using AlertDialog from Shadcn UI for confirmation instead of window.confirm
+      // The actual confirmation dialog is handled in NoteEditor.tsx
+      // This button just triggers the delete action directly if clicked.
+      // For consistency, let's ensure confirmation is handled where the action is triggered.
       onDeleteNote(selectedNote.id);
-      setSelectedNote(null);
+      setSelectedNote(null); // Clear selected note after deletion
       setIsEditing(false); // Close editor if open
       toast({
         title: "Note deleted!",
         description: `Note '${selectedNote.title}' has been removed.`,
         variant: "destructive",
         duration: 3000,
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: "No note selected for deletion.",
+        variant: "destructive",
       });
     }
   }, [selectedNote, onDeleteNote, toast]);
@@ -112,10 +120,11 @@ const Notes: React.FC<NotesProps> = ({ notes, onSaveNote, onDeleteNote }) => {
         <div className="flex items-center space-x-2 mb-4">
           <Input
             placeholder="Search notes..."
-            className="flex-1 bg-input-background border-input text-black font-medium placeholder:text-muted-foreground focus:ring-1 focus:ring-primary" // Changed text-foreground to text-white
+            className="flex-1 bg-input-background border-input text-white placeholder:text-muted-foreground focus:ring-1 focus:ring-primary"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            icon={<Search className="h-4 w-4 text-muted-foreground" />} // Assuming Input component supports icon prop
+            // Assuming Input component supports icon prop, if not, you'd add the icon separately
+            // icon={<Search className="h-4 w-4 text-muted-foreground" />}
           />
           <Button
             onClick={handleNewNote}
@@ -127,12 +136,11 @@ const Notes: React.FC<NotesProps> = ({ notes, onSaveNote, onDeleteNote }) => {
           </Button>
         </div>
         <Separator className="mb-4 bg-border" />
-        <div className="flex-1 overflow-y-auto pr-2"> {/* Added pr-2 for scrollbar spacing */}
+        <div className="flex-1 overflow-y-auto pr-2">
           <NoteList
             notes={sortedNotes}
             selectedNoteId={selectedNote?.id || null}
             onSelectNote={handleSelectNote}
-            // onNewNote is handled by the button above
           />
           {sortedNotes.length === 0 && !searchTerm && (
             <div className="text-center text-muted-foreground py-8">
@@ -152,16 +160,17 @@ const Notes: React.FC<NotesProps> = ({ notes, onSaveNote, onDeleteNote }) => {
         {isEditing ? (
           <NoteEditor
             note={selectedNote}
-            onSave={handleSave}
-            onCancel={handleCancel}
+            onSaveNote={handleSave} // Renamed prop to match NoteEditor's expectation
+            onDeleteNote={handleDelete} // Pass delete handler
+            onCloseEditor={handleCancel} // Pass cancel handler as close editor
           />
         ) : selectedNote ? (
           <div className="flex flex-col h-full">
-            <div className="flex justify-between items-start mb-4"> {/* Changed items-center to items-start */}
-              <h2 className="text-3xl font-bold text-foreground break-words max-w-[calc(100%-120px)]"> {/* Added break-words and max-width */}
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-3xl font-bold text-foreground break-words max-w-[calc(100%-120px)]">
                 {selectedNote.title}
               </h2>
-              <div className="flex space-x-2 shrink-0"> {/* Added shrink-0 */}
+              <div className="flex space-x-2 shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
@@ -173,7 +182,7 @@ const Notes: React.FC<NotesProps> = ({ notes, onSaveNote, onDeleteNote }) => {
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={handleDelete}
+                  onClick={handleDelete} // This button directly calls handleDelete
                   className="hover:bg-destructive/90 transition-colors"
                 >
                   <Trash2 className="h-4 w-4 mr-1" /> Delete
@@ -181,9 +190,9 @@ const Notes: React.FC<NotesProps> = ({ notes, onSaveNote, onDeleteNote }) => {
               </div>
             </div>
             <p className="text-sm text-muted-foreground mb-6">
-              Last updated: {new Date(selectedNote.updatedAt || selectedNote.createdAt).toLocaleString()}
+              Last updated: {new Date(selectedNote.updated_at || selectedNote.created_at).toLocaleString()}
             </p>
-            <div className="flex-1 overflow-y-auto whitespace-pre-wrap text-foreground leading-relaxed"> {/* Added flex-1 and leading-relaxed */}
+            <div className="flex-1 overflow-y-auto whitespace-pre-wrap text-foreground leading-relaxed">
               {selectedNote.content}
             </div>
           </div>

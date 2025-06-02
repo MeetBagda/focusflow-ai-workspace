@@ -1,9 +1,15 @@
+/**
+ * @fileoverview TaskItem component for displaying a single task.
+ * It includes a checkbox for completion, task title, optional project badge,
+ * due date, and a delete button (visible on hover).
+ */
+
 import React from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Task } from "@/types/task";
-import { Project } from "@/types/project";
+import { Task, Project } from "@/types"; // Import Task and Project from the main types barrel file
+import { Trash2 } from "lucide-react"; // Import Trash2 icon directly for clarity
 
 interface TaskItemProps {
   task: Task;
@@ -29,20 +35,20 @@ const TaskItem: React.FC<TaskItemProps> = ({
   currentProject = null,
 }) => {
   // Find the project this task belongs to
-  const taskProject = showProjectBadge && task.project_id 
-    ? projects.find(p => p.id === task.project_id) 
+  const taskProject = showProjectBadge && task.project_id
+    ? projects.find(p => p.id === task.project_id)
     : null;
 
   return (
     <div className="flex items-center justify-between py-2 px-3 hover:bg-accent/30 rounded-md transition-colors group">
       <div className="flex items-center gap-3">
-        <Checkbox 
+        <Checkbox
           id={`task-${task.id}`}
           checked={task.completed}
           onCheckedChange={() => onToggleComplete(task.id)}
         />
         <div>
-          <label 
+          <label
             htmlFor={`task-${task.id}`}
             className={cn(
               "cursor-pointer",
@@ -51,13 +57,13 @@ const TaskItem: React.FC<TaskItemProps> = ({
           >
             {task.title}
           </label>
-          
-          {/* Show project badge if needed */}
+
+          {/* Show project badge if needed and not the current project being filtered */}
           {taskProject && taskProject.id !== currentProject?.id && (
             <div className="flex items-center mt-1">
-              <div 
-                className="w-2 h-2 rounded-full mr-1.5" 
-                style={{ backgroundColor: taskProject.color }} 
+              <div
+                className="w-2 h-2 rounded-full mr-1.5"
+                style={{ backgroundColor: taskProject.color || '#ccc' }} // Fallback color
               />
               <span className="text-xs text-muted-foreground">
                 {taskProject.name}
@@ -66,37 +72,24 @@ const TaskItem: React.FC<TaskItemProps> = ({
           )}
         </div>
       </div>
-      
+
       <div className="flex items-center gap-2">
         {task.due_date && (
           <span className="text-xs text-muted-foreground">
+            {/* Format date only if due_date is a valid date string */}
             {new Date(task.due_date).toLocaleDateString()}
           </span>
         )}
+        {/* The delete button using a custom SVG, replaced with Trash2 for consistency and clarity */}
         <div className="hidden md:block">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
             onClick={() => onDeleteTask(task.id)}
             className="h-7 w-7 p-0 opacity-0 group-hover:opacity-70 hover:opacity-100"
           >
             <span className="sr-only">Delete task</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="opacity-70 hover:opacity-100"
-            >
-              <path d="M3 6h18" />
-              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-            </svg>
+            <Trash2 className="h-4 w-4 opacity-70 hover:opacity-100" /> {/* Using Lucide icon */}
           </Button>
         </div>
       </div>

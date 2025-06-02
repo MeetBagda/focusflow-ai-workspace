@@ -1,52 +1,79 @@
+/**
+ * @fileoverview Calendar page component for displaying and managing user tasks in a calendar or board view.
+ * This component integrates with useTasks and useProjects hooks for data,
+ * and provides various ways to visualize and interact with tasks based on their due dates.
+ */
+
 import React, { useState, useMemo, useCallback } from "react";
-import { Calendar } from "@/components/ui/calendar";
+import { Calendar } from "@/components/ui/calendar"; // Assuming custom calendar component
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Task } from "@/types/task";
+import { Task, Project } from "@/types"; // Import Task and Project from the main types barrel file
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import TaskBoard from "@/components/tasks/TaskBoard";
-import TaskItem from "@/components/tasks/TaskItem";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "@/components/ui/use-toast";
+import TaskBoard from "@/components/tasks/TaskBoard"; // Existing TaskBoard
+import TaskItem from "@/components/tasks/TaskItem"; // To display tasks
+import { Button } from "@/components/ui/button"; // For Add Task button
+import { Plus } from "lucide-react"; // Plus icon
+import { useNavigate } from "react-router-dom"; // For navigation
+import { toast } from "@/components/ui/use-toast"; // For toasts
+
+// Import the useApi hooks from your centralized hooks directory
+import { useTasks, useProjects } from "@/hooks/useApi";
 
 interface CalendarPageProps {
-  projects: { id: string; name: string }[];
-  tasks: Task[];
-  onToggleComplete?: (id: string) => void;
-  onDeleteTask?: (id: string) => void;
-  onAddTask?: (title: string, dueDate: Date | null) => void;
-  onUpdateTask?: (id: string, updates: Partial<Task>) => void;
-  onDuplicateTask?: (task: Task) => void;
+  // These props are now handled internally by the useTasks and useProjects hooks
+  // and are no longer passed from App.tsx directly.
+  // The component will fetch its own data and manage its own state.
 }
 
-// Helper function to format a Date object to 'YYYY-MM-DD' string locally
-const getLocalDateString = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+const CalendarPage: React.FC<CalendarPageProps> = () => {
+  // Use the hooks to get tasks and projects data and their respective CRUD operations
+  const {
+    tasks,
+    tasksLoading,
+    tasksError,
+    addTask,
+    updateTask,
+    deleteTask,
+    duplicateTask,
+    refetchTasks // Added refetch for manual refresh if needed
+  } = useTasks();
 
-const CalendarPage: React.FC<CalendarPageProps> = ({
-  tasks,
-  projects,
-  onToggleComplete = () => {},
-  onDeleteTask = () => {},
-  onAddTask = () => {},
-  onUpdateTask = () => {},
-  onDuplicateTask = () => {},
-}) => {
+  const {
+    projects,
+    projectsLoading,
+    projectsError,
+    refetchProjects // Added refetch for manual refresh if needed
+  } = useProjects();
+
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [activeTab, setActiveTab] = useState<string>("board");
+  const [activeTab, setActiveTab] = useState<string>("board"); // Default to board view
   const navigate = useNavigate();
 
+  // Show loading/error states
+  if (tasksLoading || projectsLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-120px)] text-muted-foreground">
+        Loading calendar data...
+      </div>
+    );
+  }
+
+  if (tasksError || projectsError) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-120px)] text-red-500">
+        Error loading data: {tasksError || projectsError}
+      </div>
+    );
+  }
+
+  // Memoize today's date for consistent comparisons
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
   }, []);
 
+  // Memoize tomorrow's date
   const tomorrow = useMemo(() => {
     const d = new Date(today);
     d.setDate(d.getDate() + 1);
@@ -54,25 +81,24 @@ const CalendarPage: React.FC<CalendarPageProps> = ({
     return d;
   }, [today]);
 
+  // Memoize the end of the current week (Saturday)
   const endOfWeek = useMemo(() => {
     const d = new Date(today);
-    const dayOfWeek = today.getDay();
+    const dayOfWeek = today.getDay(); // 0 for Sunday, 6 for Saturday
     const daysUntilEndOfWeek = 6 - dayOfWeek;
     d.setDate(today.getDate() + daysUntilEndOfWeek);
-    d.setHours(23, 59, 59, 999);
+    d.setHours(23, 59, 59, 999); // Set to end of the day
     return d;
   }, [today]);
 
+  // Memoize and group tasks by date for calendar markers and lookup
   const tasksByDate = useMemo(() => {
     const grouped: Record<string, Task[]> = {};
     tasks.forEach(task => {
-      if (task.dueDate) {
-        // Assuming task.dueDate is 'YYYY-MM-DD' or a string new Date() can parse correctly for date part
-        // For consistency, ensure task.dueDate is stored as YYYY-MM-DD string representing local date
-        const dateObj = new Date(task.dueDate); // If task.dueDate is YYYY-MM-DD, it's parsed as UTC midnight
-                                                // To get local date key if needed: getLocalDateString(dateObj) - but check usage
-        const dateKey = new Date(task.dueDate).toISOString().split('T')[0]; // This key is UTC date string.
-                                                                           // This is fine if consistently used.
+      if (task.due_date) { // Use due_date as per Task type
+        // Ensure task.due_date is consistently normalized to YYYY-MM-DD
+        // at the point of task creation/saving (e.g., in AddTaskForm).
+        const dateKey = new Date(task.due_date).toISOString().split('T')[0]; // YYYY-MM-DD
         if (!grouped[dateKey]) {
           grouped[dateKey] = [];
         }
@@ -82,53 +108,51 @@ const CalendarPage: React.FC<CalendarPageProps> = ({
     return grouped;
   }, [tasks]);
 
+  // Memoize filtered tasks for specific categories
   const overdueTasks = useMemo(() => {
     return tasks.filter(task => {
-      if (!task.dueDate || task.completed) return false;
-      const dueDate = new Date(task.dueDate); // Parses YYYY-MM-DD as UTC midnight
-      dueDate.setHours(0, 0, 0, 0);          // Adjusts to local midnight
+      if (!task.due_date || task.completed) return false;
+      const dueDate = new Date(task.due_date);
+      dueDate.setHours(0, 0, 0, 0); // Normalize for comparison
       return dueDate.getTime() < today.getTime();
     });
   }, [tasks, today]);
 
   const todayTasks = useMemo(() => {
     return tasks.filter(task => {
-      if (!task.dueDate) return false;
-      const dueDate = new Date(task.dueDate);
-      dueDate.setHours(0, 0, 0, 0);
+      if (!task.due_date) return false;
+      const dueDate = new Date(task.due_date);
+      dueDate.setHours(0, 0, 0, 0); // Normalize for comparison
       return dueDate.getTime() === today.getTime();
     });
   }, [tasks, today]);
 
   const tomorrowTasks = useMemo(() => {
     return tasks.filter(task => {
-      if (!task.dueDate) return false;
-      const dueDate = new Date(task.dueDate);
-      dueDate.setHours(0, 0, 0, 0);
+      if (!task.due_date) return false;
+      const dueDate = new Date(task.due_date);
+      dueDate.setHours(0, 0, 0, 0); // Normalize for comparison
       return dueDate.getTime() === tomorrow.getTime();
     });
   }, [tasks, tomorrow]);
 
   const upcomingTasks = useMemo(() => {
     return tasks.filter(task => {
-      if (!task.dueDate) return false;
-      const dueDate = new Date(task.dueDate);
-      dueDate.setHours(0, 0, 0, 0);
+      if (!task.due_date) return false;
+      const dueDate = new Date(task.due_date);
+      dueDate.setHours(0, 0, 0, 0); // Normalize for comparison
+      // Upcoming tasks are due after tomorrow and within the current week (inclusive of endOfWeek)
       return dueDate.getTime() > tomorrow.getTime() && dueDate.getTime() <= endOfWeek.getTime();
     });
   }, [tasks, tomorrow, endOfWeek]);
 
+  // Memoize tasks for the currently selected date
   const selectedDateTasks = useMemo(() => {
-    // If 'date' is a local date, its ISOString().split('T')[0] might be the previous day in UTC.
-    // For matching with tasksByDate (which uses UTC date keys), we need consistent keying.
-    // If task.dueDate is YYYY-MM-DD (local), and tasksByDate uses UTC keys, this needs care.
-    // For simplicity here, assuming date selection and task.dueDate storage allow this to work.
-    // If tasks are stored with 'YYYY-MM-DD' representing local date, and tasksByDate key uses that string directly
-    // (after new Date(localDateStr).toISOString().split('T')[0]), it should be fine.
-    const selectedDateStr = date ? new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString().split('T')[0] : undefined;
+    const selectedDateStr = date?.toISOString().split('T')[0];
     return selectedDateStr ? tasksByDate[selectedDateStr] || [] : [];
   }, [date, tasksByDate]);
 
+  // Helper component to render a list of tasks
   const RenderTaskList = useCallback(({ taskList, title, emptyMessage, showAddButton = false, targetDate = null }: { taskList: Task[], title: string, emptyMessage: string, showAddButton?: boolean, targetDate?: Date | null }) => (
     <Card className="bg-card border border-border shadow-md">
       <CardHeader className="pb-2">
@@ -141,12 +165,12 @@ const CalendarPage: React.FC<CalendarPageProps> = ({
               <TaskItem
                 key={task.id}
                 task={task}
-                onToggleComplete={onToggleComplete}
-                onDeleteTask={onDeleteTask}
-                onUpdateTask={onUpdateTask}
-                onDuplicateTask={onDuplicateTask}
-                projects={projects}
-                showProjectBadge={true}
+                onToggleComplete={(id) => updateTask(id, { completed: !tasks?.find(t => t.id === id)?.completed })}
+                onDeleteTask={deleteTask}
+                onUpdateTask={updateTask}
+                onDuplicateTask={duplicateTask}
+                projects={projects} // Pass projects for move functionality if TaskItem supports it
+                showProjectBadge={true} // Always show project badge in calendar view
               />
             ))}
           </ul>
@@ -159,9 +183,11 @@ const CalendarPage: React.FC<CalendarPageProps> = ({
                 size="sm"
                 className="mt-3 text-primary hover:bg-primary/10"
                 onClick={() => {
-                  // --- MODIFIED LINE ---
-                  const localDateString = getLocalDateString(targetDate);
-                  navigate(`/tasks?date=${localDateString}`);
+                  // Navigating to /tasks page to add a task with the target date pre-filled.
+                  // Ensure that the AddTaskForm or the task creation logic on the /tasks page
+                  // correctly parses this 'date' query parameter and normalizes the dueDate
+                  // to the start of the day (00:00:00) before saving the task.
+                  navigate(`/app/tasks?date=${targetDate.toISOString().split('T')[0]}`); // Updated path to /app/tasks
                   toast({
                     title: "Add Task",
                     description: `Navigating to add task for ${targetDate.toLocaleDateString()}.`,
@@ -175,7 +201,26 @@ const CalendarPage: React.FC<CalendarPageProps> = ({
         )}
       </CardContent>
     </Card>
-  ), [onToggleComplete, onDeleteTask, onUpdateTask, onDuplicateTask, projects, navigate, toast]);
+  ), [tasks, projects, updateTask, deleteTask, duplicateTask, navigate, toast]);
+
+
+  // Handler for adding a task (used by TaskBoard)
+  const handleAddTask = useCallback(async (taskData: Partial<Task>) => {
+    try {
+      await addTask(taskData as Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'>);
+      toast({
+        title: "Task added",
+        description: `Task '${taskData.title}' has been added.`,
+      });
+    } catch (error: any) {
+      console.error("Error adding task:", error);
+      toast({
+        title: "Error",
+        description: `Failed to add task: ${error.message || 'Unknown error'}`,
+        variant: "destructive",
+      });
+    }
+  }, [addTask, toast]);
 
 
   return (
@@ -191,15 +236,18 @@ const CalendarPage: React.FC<CalendarPageProps> = ({
         <TabsContent value="board" className="mt-6">
           <TaskBoard
             tasks={tasks}
-            onToggleComplete={onToggleComplete}
-            onDeleteTask={onDeleteTask}
-            onAddTask={onAddTask} // Note: onAddTask is passed but not directly used by this component's "Add Task" buttons
+            onToggleComplete={(id) => updateTask(id, { completed: !tasks?.find(t => t.id === id)?.completed })}
+            onDeleteTask={deleteTask}
+            onAddTask={handleAddTask} // Use the new handleAddTask
+            onUpdateTask={updateTask}
+            onDuplicateTask={duplicateTask}
             projects={projects}
           />
         </TabsContent>
 
         <TabsContent value="calendar" className="mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column: Calendar and Selected Date Tasks */}
             <div className="lg:col-span-2 space-y-6">
               <Card className="bg-card border border-border shadow-md">
                 <CardHeader className="pb-2">
@@ -212,14 +260,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({
                     onSelect={setDate}
                     className="rounded-md border border-border bg-card-secondary text-foreground w-full"
                     modifiers={{
-                      // Ensure keys for modifiers match how tasksByDate is keyed if dates are local vs UTC
-                      hasTasks: Object.keys(tasksByDate).map(dateKey => {
-                        // dateKey from tasksByDate is YYYY-MM-DD (UTC). Need to parse it correctly.
-                        // new Date(dateKey) will interpret "YYYY-MM-DD" as UTC midnight.
-                        // The Calendar component usually works with local dates.
-                        const [year, month, day] = dateKey.split('-').map(Number);
-                        return new Date(year, month - 1, day); // Create local date for modifier
-                      }),
+                      hasTasks: Object.keys(tasksByDate).map(dateKey => new Date(dateKey)),
                     }}
                     modifiersStyles={{
                       hasTasks: {
@@ -250,10 +291,10 @@ const CalendarPage: React.FC<CalendarPageProps> = ({
                         <TaskItem
                           key={task.id}
                           task={task}
-                          onToggleComplete={onToggleComplete}
-                          onDeleteTask={onDeleteTask}
-                          onUpdateTask={onUpdateTask}
-                          onDuplicateTask={onDuplicateTask}
+                          onToggleComplete={(id) => updateTask(id, { completed: !tasks?.find(t => t.id === id)?.completed })}
+                          onDeleteTask={deleteTask}
+                          onUpdateTask={updateTask}
+                          onDuplicateTask={duplicateTask}
                           projects={projects}
                           showProjectBadge={true}
                         />
@@ -268,9 +309,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({
                         className="mt-3 text-primary hover:bg-primary/10"
                         onClick={() => {
                           if (date) {
-                            // --- MODIFIED LINE ---
-                            const localDateString = getLocalDateString(date);
-                            navigate(`/tasks?date=${localDateString}`);
+                            navigate(`/app/tasks?date=${date.toISOString().split('T')[0]}`); // Updated path to /app/tasks
                             toast({
                               title: "Add Task",
                               description: `Navigating to add task for ${date.toLocaleDateString()}.`,
@@ -286,6 +325,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({
               </Card>
             </div>
 
+            {/* Right Column: Overdue, Today, Tomorrow, Upcoming Tasks */}
             <div className="lg:col-span-1 space-y-6">
               <RenderTaskList
                 taskList={overdueTasks}

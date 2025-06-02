@@ -1,13 +1,16 @@
-// filepath: d:\VS CODE\SAAS\focusflow-ai-workspace\frontend\src\components\tasks\TaskList.tsx
+/**
+ * @fileoverview TaskList component for rendering a collection of TaskItem components.
+ * It serves as a container for displaying lists of tasks.
+ */
+
 import React from "react";
 import TaskItem from "./TaskItem";
-import { Task } from "@/types/task";
-import { Project } from "@/types/project";
+import { Task, Project } from "@/types"; // Import Task and Project from the main types barrel file
 
 interface TaskListProps {
   tasks: Task[];
   onToggleComplete: (id: number) => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: number) => void; // Renamed from onDeleteTask to onDelete for consistency with the prop name
   onUpdateTask?: (id: number, updates: Partial<Task>) => void;
   onDuplicateTask?: (task: Task) => void;
   onMoveTask?: (taskId: number, projectId: number) => void;
@@ -19,7 +22,7 @@ interface TaskListProps {
 const TaskList: React.FC<TaskListProps> = ({
   tasks,
   onToggleComplete,
-  onDelete,
+  onDelete, // Use the renamed prop here
   onUpdateTask,
   onDuplicateTask,
   onMoveTask,
@@ -42,7 +45,7 @@ const TaskList: React.FC<TaskListProps> = ({
           key={task.id}
           task={task}
           onToggleComplete={onToggleComplete}
-          onDeleteTask={onDelete}
+          onDeleteTask={onDelete} // Pass onDelete to onDeleteTask prop of TaskItem
           onUpdateTask={onUpdateTask}
           onDuplicateTask={onDuplicateTask}
           onMoveTask={onMoveTask}

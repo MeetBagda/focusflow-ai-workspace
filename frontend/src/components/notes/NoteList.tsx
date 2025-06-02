@@ -1,65 +1,43 @@
+/**
+ * @fileoverview NoteList component for displaying a list of notes.
+ * This component handles the rendering of individual note items and
+ * manages the selection of a note for editing/viewing.
+ */
 
-import React from "react";
-import { Note } from "@/types/note";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import React from 'react';
+import { Note } from '@/types'; // Import the Note type
+import { cn } from '@/lib/utils'; // Assuming 'cn' is a utility for class concatenation
 
 interface NoteListProps {
-  notes: Note[];
-  selectedNoteId: string | null;
-  onSelectNote: (note: Note) => void;
-  onNewNote: () => void;
+  notes: Note[]; // Array of notes to display
+  selectedNoteId: number | null; // ID of the currently selected note
+  onSelectNote: (note: Note) => void; // Handler for when a note is selected
 }
 
-const NoteList: React.FC<NoteListProps> = ({
-  notes,
-  selectedNoteId,
-  onSelectNote,
-  onNewNote,
-}) => {
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
+const NoteList: React.FC<NoteListProps> = ({ notes, selectedNoteId, onSelectNote }) => {
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex justify-between items-center mb-4">
-       
-      </div>
-
-      <div className="overflow-y-auto flex-1">
-        {notes.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <p>No notes yet. Create your first note!</p>
+    <div className="space-y-2">
+      {notes.length === 0 ? (
+        <p className="text-muted-foreground text-center py-4">No notes to display.</p>
+      ) : (
+        notes.map((note) => (
+          <div
+            key={note.id}
+            className={cn(
+              "p-3 border border-border rounded-md cursor-pointer transition-colors",
+              "hover:bg-accent hover:text-accent-foreground",
+              selectedNoteId === note.id ? "bg-accent text-accent-foreground border-primary" : "bg-card"
+            )}
+            onClick={() => onSelectNote(note)}
+          >
+            <h3 className="font-semibold text-foreground text-lg truncate">{note.title}</h3>
+            <p className="text-sm text-muted-foreground line-clamp-2">{note.content || 'No content'}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {new Date(note.updated_at || note.created_at).toLocaleDateString()}
+            </p>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {notes.map((note) => (
-              <Card 
-                key={note.id}
-                className={cn(
-                  "cursor-pointer hover:bg-accent/30 transition-colors",
-                  selectedNoteId === note.id && "bg-accent/50 border-accent"
-                )}
-                onClick={() => onSelectNote(note)}
-              >
-                <CardContent className="p-3">
-                  <h3 className="font-medium truncate mb-1">{note.title}</h3>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <p className="truncate flex-1">{note.content.substring(0, 50)}{note.content.length > 50 ? '...' : ''}</p>
-                    <p className="ml-2">{formatDate(note.updatedAt || note.createdAt)}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+        ))
+      )}
     </div>
   );
 };

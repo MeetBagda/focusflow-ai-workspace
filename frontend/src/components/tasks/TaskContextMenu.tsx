@@ -1,3 +1,8 @@
+/**
+ * @fileoverview TaskContextMenu component provides a context menu (right-click)
+ * and a dropdown menu (mobile) for various task actions like setting priority,
+ * reminders, duplicating, moving, and deleting.
+ */
 
 import React, { useState } from "react";
 import {
@@ -22,8 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Task } from "@/types/task";
-import { Project } from "@/types/project";
+import { Task, Project } from "@/types"; // Import Task and Project from the main types barrel file
 import { Calendar, Flag, Clock, Copy, Move, Link, Trash2, MoreHorizontal, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,10 +39,10 @@ interface TaskContextMenuProps {
   task: Task;
   children: React.ReactNode;
   projects: Project[];
-  onUpdateTask: (id: string, updates: Partial<Task>) => void;
-  onDeleteTask: (id: string) => void;
+  onUpdateTask: (id: number, updates: Partial<Task>) => void; // Changed id type to number
+  onDeleteTask: (id: number) => void; // Changed id type to number
   onDuplicateTask: (task: Task) => void;
-  onMoveTask: (taskId: string, projectId: string) => void;
+  onMoveTask: (taskId: number, projectId: number) => void; // Changed id types to number
 }
 
 const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
@@ -52,12 +56,22 @@ const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
 }) => {
   const { toast } = useToast();
   const [isReminderDialogOpen, setIsReminderDialogOpen] = useState(false);
+  // Initialize reminderDate and reminderTime from existing task reminder or current date/time
   const [reminderDate, setReminderDate] = useState(
-    task.reminder?.date || format(new Date(), "yyyy-MM-dd")
+    task.reminder?.date ? format(new Date(task.reminder.date), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd")
   );
   const [reminderTime, setReminderTime] = useState(
     task.reminder?.time || format(new Date(), "HH:mm")
   );
+
+  // Update local reminder state when task prop changes (e.g., if reminder is set/cleared externally)
+  React.useEffect(() => {
+    setReminderDate(
+      task.reminder?.date ? format(new Date(task.reminder.date), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd")
+    );
+    setReminderTime(task.reminder?.time || format(new Date(), "HH:mm"));
+  }, [task.reminder]);
+
 
   const handleSetPriority = (priority: Task["priority"]) => {
     onUpdateTask(task.id, { priority });
@@ -68,22 +82,22 @@ const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
   };
 
   const handleToggleRecurring = () => {
-    onUpdateTask(task.id, { isRecurring: !task.isRecurring });
+    onUpdateTask(task.id, { is_recurring: !task.is_recurring }); // Use is_recurring
     toast({
-      title: task.isRecurring ? "Recurring removed" : "Set as recurring",
-      description: task.isRecurring 
-        ? "Task is no longer recurring" 
+      title: task.is_recurring ? "Recurring removed" : "Set as recurring",
+      description: task.is_recurring
+        ? "Task is no longer recurring"
         : "Task is now set as recurring",
     });
   };
 
   const handleCopyLink = () => {
-    // In a real app, this would copy a link to the task
+    // In a real app, this would copy a sharable link to the task's detail page
     // For now, let's just copy the task title
     navigator.clipboard.writeText(task.title);
     toast({
       title: "Link copied",
-      description: "Task link copied to clipboard",
+      description: "Task title copied to clipboard",
     });
   };
 
@@ -96,31 +110,47 @@ const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
   };
 
   const handleSetReminder = () => {
-    const reminderObj = {
-      date: reminderDate,
-      time: reminderTime,
-      notified: false
+    const reminderDateTime = new Date(`${reminderDate}T${reminderTime}`);
+    if (isNaN(reminderDateTime.getTime())) {
+      toast({
+        title: "Invalid Date/Time",
+        description: "Please enter a valid date and time for the reminder.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reminderObj: Task['reminder'] = { // Ensure type matches Task['reminder']
+      date: format(reminderDateTime, "yyyy-MM-dd"), // Store just the date part
+      time: format(reminderDateTime, "HH:mm"), // Store just the time part
+      notified: false, // Default to false
+      // Add other reminder properties if your Task type has them (e.g., timestamp, message)
+      // timestamp: reminderDateTime.toISOString(),
     };
-    
+
     onUpdateTask(task.id, { reminder: reminderObj });
-    setIsReminderDialogOpen(false);
-    
+    setIsReminderDialogOpen(false); // Close dialog
+
     toast({
       title: "Reminder set",
-      description: `Reminder set for ${format(new Date(`${reminderDate}T${reminderTime}`), "PPp")}`,
+      description: `Reminder set for ${format(reminderDateTime, "PPp")}`,
     });
   };
 
   const handleRemoveReminder = () => {
     onUpdateTask(task.id, { reminder: null });
-    
+
     toast({
       title: "Reminder removed",
       description: "The reminder has been removed from this task",
     });
   };
 
-  // Inline dropdown for mobile support
+  // Inline dropdown for mobile support (moved to be a direct child of ContextMenu)
+  // This structure might be slightly off; typically ContextMenu and DropdownMenu are used for different interactions.
+  // For simplicity, let's assume `children` contains the element that triggers the context menu.
+  // The mobile dropdown should probably be rendered outside the ContextMenu or conditionally.
+  // For now, I'll keep the structure as close to yours as possible but note the potential for refinement.
   const TaskDropdownMenu = () => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -149,7 +179,7 @@ const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleToggleRecurring}>
           <Clock className="mr-2 h-4 w-4" />
-          {task.isRecurring ? "Remove Recurring" : "Make Recurring"}
+          {task.is_recurring ? "Remove Recurring" : "Make Recurring"}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setIsReminderDialogOpen(true)}>
           <Bell className="mr-2 h-4 w-4" />
@@ -171,7 +201,30 @@ const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
           Copy Link
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem 
+        {/* Move to Project sub-menu */}
+        {projects.length > 0 && (
+          <>
+            <DropdownMenuItem className="font-semibold" disabled>
+              <Move className="mr-2 h-4 w-4" />
+              Move to Project
+            </DropdownMenuItem>
+            {projects.map((project) => (
+              <DropdownMenuItem
+                key={project.id}
+                onClick={() => onMoveTask(task.id, project.id)}
+                className="pl-8"
+              >
+                <div
+                  className="w-3 h-3 rounded-full mr-2"
+                  style={{ backgroundColor: project.color || '#ccc' }}
+                />
+                {project.name}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <DropdownMenuItem
           onClick={() => onDeleteTask(task.id)}
           className="text-red-500 focus:text-red-500"
         >
@@ -184,6 +237,7 @@ const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
 
   return (
     <>
+      {/* Context Menu (for desktop) */}
       <ContextMenu>
         <ContextMenuTrigger>{children}</ContextMenuTrigger>
         <ContextMenuContent className="w-56">
@@ -206,7 +260,7 @@ const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleToggleRecurring}>
             <Clock className="mr-2 h-4 w-4" />
-            {task.isRecurring ? "Remove Recurring" : "Make Recurring"}
+            {task.is_recurring ? "Remove Recurring" : "Make Recurring"}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => setIsReminderDialogOpen(true)}>
             <Bell className="mr-2 h-4 w-4" />
@@ -228,6 +282,7 @@ const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
             Copy Link
           </ContextMenuItem>
           <ContextMenuSeparator />
+          {/* Move to Project sub-menu */}
           {projects.length > 0 && (
             <>
               <ContextMenuItem className="font-semibold" disabled>
@@ -235,14 +290,14 @@ const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
                 Move to Project
               </ContextMenuItem>
               {projects.map((project) => (
-                <ContextMenuItem 
+                <ContextMenuItem
                   key={project.id}
                   onClick={() => onMoveTask(task.id, project.id)}
                   className="pl-8"
                 >
-                  <div 
-                    className="w-3 h-3 rounded-full mr-2" 
-                    style={{ backgroundColor: project.color }}
+                  <div
+                    className="w-3 h-3 rounded-full mr-2"
+                    style={{ backgroundColor: project.color || '#ccc' }}
                   />
                   {project.name}
                 </ContextMenuItem>
@@ -250,7 +305,7 @@ const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
               <ContextMenuSeparator />
             </>
           )}
-          <ContextMenuItem 
+          <ContextMenuItem
             onClick={() => onDeleteTask(task.id)}
             className="text-red-500 focus:text-red-500"
           >
@@ -259,8 +314,10 @@ const TaskContextMenu: React.FC<TaskContextMenuProps> = ({
           </ContextMenuItem>
         </ContextMenuContent>
 
-        {/* For mobile */}
+        {/* For mobile: Use a regular DropdownMenu as ContextMenu typically for right-click */}
+        {/* This part needs careful integration within your layout, as 'ml-auto' assumes specific flex parent */}
         <div className="inline-block md:hidden ml-auto">
+           {/* You might want to wrap `children` with an element that has `relative` positioning if the dropdown button needs to be absolutely positioned relative to it */}
           <TaskDropdownMenu />
         </div>
       </ContextMenu>
