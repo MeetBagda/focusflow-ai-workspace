@@ -103,16 +103,16 @@ const Tasks: React.FC<TasksProps> = () => {
       if (activeTab === "completed") return task.completed;
       if (activeTab === "uncompleted") return !task.completed;
 
-      if (!task.due_date) return activeTab === "no-date";
+      if (!task.dueDate) return activeTab === "no-date";
 
-      const due_date = new Date(task.due_date);
-      due_date.setHours(0, 0, 0, 0); // Normalize due_date to start of day for comparison
+      const dueDate = new Date(task.dueDate);
+      dueDate.setHours(0, 0, 0, 0); // Normalize dueDate to start of day for comparison
 
-      if (activeTab === "today") return due_date.getTime() === today.getTime();
-      if (activeTab === "tomorrow") return due_date.getTime() === tomorrow.getTime();
+      if (activeTab === "today") return dueDate.getTime() === today.getTime();
+      if (activeTab === "tomorrow") return dueDate.getTime() === tomorrow.getTime();
       if (activeTab === "this-week") {
         // For "this-week", tasks should be due from 'today' up to 'endOfWeek' (inclusive)
-        return due_date.getTime() >= today.getTime() && due_date.getTime() <= endOfWeek.getTime();
+        return dueDate.getTime() >= today.getTime() && dueDate.getTime() <= endOfWeek.getTime();
       }
       return false;
     });
@@ -130,7 +130,7 @@ const Tasks: React.FC<TasksProps> = () => {
   const handleAddTask = useCallback(async (title: string, dueDate: Date | null) => {
     const taskData: Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
       title,
-      due_date: dueDate?.toISOString() || null,
+      dueDate: dueDate?.toISOString() || null,
       project_id: currentProject?.id || null,
       completed: false,
       priority: "high", // Default priority

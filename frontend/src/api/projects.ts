@@ -1,47 +1,33 @@
-/**
- * @fileoverview API service for interacting with project-related backend endpoints.
- * This file defines functions for fetching, creating, updating, and deleting projects,
- * ensuring all requests are authenticated using the useAuthenticatedFetch hook.
- */
+import { useCallback } from 'react';
+import { useAuthenticatedFetch } from './client';
+import { Project, PartialUpdate } from '@/types';
 
-import { useAuthenticatedFetch } from './client'; // Import the custom authenticated fetch hook
-import { Project, PartialUpdate } from '@/types'; // Import Project and PartialUpdate types
-
-/**
- * Custom hook to provide project API functions.
- * This hook must be called within a React component or another custom hook.
- * @returns An object containing functions for project CRUD operations.
- */
 export function useProjectsApi() {
-  const authenticatedFetch = useAuthenticatedFetch(); // Get the authenticated fetch function
+  const authenticatedFetch = useAuthenticatedFetch();
 
-  // Fetch all projects for the authenticated user
-  const getProjects = async (): Promise<Project[]> => {
+  const getProjects = useCallback(async (): Promise<Project[]> => {
     return authenticatedFetch<Project[]>('/projects');
-  };
+  }, [authenticatedFetch]);
 
-  // Create a new project for the authenticated user
-  const createProject = async (projectData: Omit<Project, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Project> => {
+  const createProject = useCallback(async (projectData: Omit<Project, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Project> => {
     return authenticatedFetch<Project>('/projects', {
       method: 'POST',
       body: JSON.stringify(projectData),
     });
-  };
+  }, [authenticatedFetch]);
 
-  // Update an existing project for the authenticated user
-  const updateProject = async (id: number, updates: PartialUpdate<Project>): Promise<Project> => {
+  const updateProject = useCallback(async (id: number, updates: PartialUpdate<Project>): Promise<Project> => {
     return authenticatedFetch<Project>(`/projects/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
-  };
+  }, [authenticatedFetch]);
 
-  // Delete a project for the authenticated user
-  const deleteProject = async (id: number): Promise<void> => {
+  const deleteProject = useCallback(async (id: number): Promise<void> => {
     return authenticatedFetch<void>(`/projects/${id}`, {
       method: 'DELETE',
     });
-  };
+  }, [authenticatedFetch]);
 
   return {
     getProjects,

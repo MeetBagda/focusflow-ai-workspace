@@ -25,7 +25,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
 // Create a new task for the authenticated user
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
-  const { title, description, due_date, priority, project_id, is_recurring, completed } = req.body;
+  const { title, description, dueDate, priority, project_id, is_recurring, completed } = req.body;
   const userId = req.userId; // Get userId from the request object
 
   if (!userId) {
@@ -53,11 +53,11 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const result = await query(
-      'INSERT INTO tasks (title, description, due_date, priority, project_id, is_recurring, completed, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+      'INSERT INTO tasks (title, description, dueDate, priority, project_id, is_recurring, completed, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
       [
         title,
         description || null,
-        due_date || null,
+        dueDate || null,
         priority || 'medium',
         project_id === 0 ? null : project_id, // Convert 0 to null since 0 is not a valid ID
         is_recurring || false,
@@ -79,7 +79,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 // Update a task for the authenticated user
 router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
-  const { title, description, completed, due_date, priority, project_id, is_recurring } = req.body;
+  const { title, description, completed, dueDate, priority, project_id, is_recurring } = req.body;
   const userId = req.userId; // Get userId from the request object
 
   if (!userId) {
@@ -120,9 +120,9 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
       params.push(completed);
     }
 
-    if (due_date !== undefined) {
-      updateFields.push(`due_date = $${paramIndex++}`);
-      params.push(due_date);
+    if (dueDate !== undefined) {
+      updateFields.push(`dueDate = $${paramIndex++}`);
+      params.push(dueDate);
     }
 
     if (priority !== undefined) {

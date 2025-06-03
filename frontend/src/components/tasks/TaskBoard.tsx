@@ -48,27 +48,27 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 
   // Group tasks by timeframe
   const overdueTasks = filteredTasks.filter(
-    (task) => !task.completed && task.due_date && isBefore(new Date(task.due_date), today)
+    (task) => !task.completed && task.dueDate && isBefore(new Date(task.dueDate), today)
   );
 
   const todayTasks = filteredTasks.filter(
-    (task) => task.due_date && isToday(new Date(task.due_date))
+    (task) => task.dueDate && isToday(new Date(task.dueDate))
   );
 
   const tomorrowTasks = filteredTasks.filter(
-    (task) => task.due_date && isTomorrow(new Date(task.due_date))
+    (task) => task.dueDate && isTomorrow(new Date(task.dueDate))
   );
 
   const upcomingTasks = filteredTasks.filter(
     (task) =>
-      task.due_date &&
-      isAfter(new Date(task.due_date), tomorrow) && // After tomorrow
-      isBefore(new Date(task.due_date), oneWeekFromNow) // Within the next 7 days
+      task.dueDate &&
+      isAfter(new Date(task.dueDate), tomorrow) && // After tomorrow
+      isBefore(new Date(task.dueDate), oneWeekFromNow) // Within the next 7 days
   );
   
   // Tasks without a due date, or tasks with a due date far in the future
   const noDueDateTasks = filteredTasks.filter(
-    (task) => !task.due_date || isAfter(new Date(task.due_date), oneWeekFromNow)
+    (task) => !task.dueDate || isAfter(new Date(task.dueDate), oneWeekFromNow)
   );
 
 
@@ -78,7 +78,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
     // onAddTask expects a Partial<Task>
     onAddTask({
       title,
-      due_date: dueDate ? dueDate.toISOString() : null, // Convert Date to ISO string
+      dueDate: dueDate ? dueDate.toISOString() : null, // Convert Date to ISO string
       project_id: currentProject?.id || null,
       completed: false,
       priority: "medium", // Default priority, can be customized

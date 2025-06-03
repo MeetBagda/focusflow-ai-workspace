@@ -74,10 +74,10 @@ const TaskItem: React.FC<TaskItemProps> = ({
       </div>
 
       <div className="flex items-center gap-2">
-        {task.due_date && (
+        {task.dueDate && (
           <span className="text-xs text-muted-foreground">
-            {/* Format date only if due_date is a valid date string */}
-            {new Date(task.due_date).toLocaleDateString()}
+            {/* Format date only if dueDate is a valid date string */}
+            {new Date(task.dueDate).toLocaleDateString()}
           </span>
         )}
         {/* The delete button using a custom SVG, replaced with Trash2 for consistency and clarity */}

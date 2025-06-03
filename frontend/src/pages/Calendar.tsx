@@ -95,10 +95,10 @@ const CalendarPage: React.FC<CalendarPageProps> = () => {
   const tasksByDate = useMemo(() => {
     const grouped: Record<string, Task[]> = {};
     tasks.forEach(task => {
-      if (task.due_date) { // Use due_date as per Task type
-        // Ensure task.due_date is consistently normalized to YYYY-MM-DD
+      if (task.dueDate) { // Use dueDate as per Task type
+        // Ensure task.dueDate is consistently normalized to YYYY-MM-DD
         // at the point of task creation/saving (e.g., in AddTaskForm).
-        const dateKey = new Date(task.due_date).toISOString().split('T')[0]; // YYYY-MM-DD
+        const dateKey = new Date(task.dueDate).toISOString().split('T')[0]; // YYYY-MM-DD
         if (!grouped[dateKey]) {
           grouped[dateKey] = [];
         }
@@ -111,8 +111,8 @@ const CalendarPage: React.FC<CalendarPageProps> = () => {
   // Memoize filtered tasks for specific categories
   const overdueTasks = useMemo(() => {
     return tasks.filter(task => {
-      if (!task.due_date || task.completed) return false;
-      const dueDate = new Date(task.due_date);
+      if (!task.dueDate || task.completed) return false;
+      const dueDate = new Date(task.dueDate);
       dueDate.setHours(0, 0, 0, 0); // Normalize for comparison
       return dueDate.getTime() < today.getTime();
     });
@@ -120,8 +120,8 @@ const CalendarPage: React.FC<CalendarPageProps> = () => {
 
   const todayTasks = useMemo(() => {
     return tasks.filter(task => {
-      if (!task.due_date) return false;
-      const dueDate = new Date(task.due_date);
+      if (!task.dueDate) return false;
+      const dueDate = new Date(task.dueDate);
       dueDate.setHours(0, 0, 0, 0); // Normalize for comparison
       return dueDate.getTime() === today.getTime();
     });
@@ -129,8 +129,8 @@ const CalendarPage: React.FC<CalendarPageProps> = () => {
 
   const tomorrowTasks = useMemo(() => {
     return tasks.filter(task => {
-      if (!task.due_date) return false;
-      const dueDate = new Date(task.due_date);
+      if (!task.dueDate) return false;
+      const dueDate = new Date(task.dueDate);
       dueDate.setHours(0, 0, 0, 0); // Normalize for comparison
       return dueDate.getTime() === tomorrow.getTime();
     });
@@ -138,8 +138,8 @@ const CalendarPage: React.FC<CalendarPageProps> = () => {
 
   const upcomingTasks = useMemo(() => {
     return tasks.filter(task => {
-      if (!task.due_date) return false;
-      const dueDate = new Date(task.due_date);
+      if (!task.dueDate) return false;
+      const dueDate = new Date(task.dueDate);
       dueDate.setHours(0, 0, 0, 0); // Normalize for comparison
       // Upcoming tasks are due after tomorrow and within the current week (inclusive of endOfWeek)
       return dueDate.getTime() > tomorrow.getTime() && dueDate.getTime() <= endOfWeek.getTime();

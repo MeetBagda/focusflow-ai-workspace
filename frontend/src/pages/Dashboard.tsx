@@ -53,8 +53,8 @@ const Dashboard: React.FC<DashboardProps> = () => {
   // Memoize tasks due today to prevent re-filtering on every render
   const tasksToday = useMemo(() => {
     return (tasks || []).filter(task => {
-      if (!task.due_date) return false; // Use due_date as per Task type
-      const dueDate = new Date(task.due_date);
+      if (!task.dueDate) return false; // Use dueDate as per Task type
+      const dueDate = new Date(task.dueDate);
       dueDate.setHours(0, 0, 0, 0);
       return dueDate.getTime() === today.getTime();
     });
@@ -89,7 +89,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
     const taskData: Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
       title,
       description: null,
-      due_date: dueDate?.toISOString() || null,
+      dueDate: dueDate?.toISOString() || null,
       priority: "high",
       is_recurring: false,
       completed: false,
