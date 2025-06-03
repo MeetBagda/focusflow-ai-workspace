@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 import cors from 'cors';
-import { clerkMiddleware  } from '@clerk/express'; // Import authMiddleware from @clerk/express
+import { clerkMiddleware } from '@clerk/express'; // Import authMiddleware from @clerk/express
 import taskRoutes from './routes/tasks';
 import projectRoutes from './routes/projects';
 import noteRoutes from './routes/notes';
@@ -17,19 +17,34 @@ const PORT = process.env.PORT || 5000;
 declare global {
   namespace Express {
     interface Request {
-      auth: {
+      // The `auth` property is now a function that returns the auth object.
+      // We'll adjust the usage below, but for type declaration,
+      // it's often better to rely on Clerk's types like `LooseAuthProp`
+      // or define a custom type if you're only accessing specific properties.
+      // For now, let's simplify the declaration to reflect the function call.
+      // Clerk's `clerkMiddleware` should handle extending Request correctly internally.
+      // If you're still seeing type errors, you might need to import `AuthObject` from Clerk
+      // and define `auth: () => AuthObject | null`.
+      // For simplicity and to match the deprecation warning, we'll assume `req.auth()` returns the object.
+      auth: { // This declaration is for the *return type* of req.auth()
         userId: string | null;
         sessionId: string | null;
         orgId: string | null;
-        // FIX: Add the 'user' property to the auth object
         user?: { // Make it optional, as it might not always be present or fully populated
           emailAddresses?: Array<{
             emailAddress: string;
-            // Add other properties of emailAddresses if needed, e.g., id, verification, etc.
           }>;
-          // Add other user properties you might access, e.g., firstName, lastName, etc.
         };
-      };
+      } | (() => { // This is the change: it can be the object directly (old) or a function (new)
+        userId: string | null;
+        sessionId: string | null;
+        orgId: string | null;
+        user?: {
+          emailAddresses?: Array<{
+            emailAddress: string;
+          }>;
+        };
+      } | null); // The function can return null if not authenticated
       userId?: string;
     }
   }
@@ -50,34 +65,37 @@ app.use((req, res, next) => {
   next();
 });
 
+// --- Public Routes (Place BEFORE Clerk Middleware) ---
+// Basic health check route - accessible without authentication
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'Backend is healthy' });
+});
+
 // --- Clerk Authentication Middleware ---
 // Apply authMiddleware to all routes under /api.
-// authMiddleware replaces ClerkExpressRequireAuth and automatically populates req.auth
-app.use('/api', clerkMiddleware ());
+// Changed '/api/*' to '/api' to resolve 'Missing parameter name' error.
+app.use('/api', clerkMiddleware());
 
 // Custom middleware to extract user_id from Clerk's auth object
 // and potentially sync user to your database.
+// Changed '/api/*' to '/api' to resolve 'Missing parameter name' error.
 app.use('/api', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  // authMiddleware populates req.auth with the authenticated user's data.
-  // req.auth.userId will be null if the user is not authenticated.
-  const userId = req.auth?.userId;
+  // FIX: Use req.auth() as a function to get the auth object
+  const authObject = typeof req.auth === 'function' ? req.auth() : req.auth;
+  const userId = authObject?.userId;
 
   if (!userId) {
-    // This case should ideally be caught by authMiddleware,
-    // but it's a good safeguard.
     res.status(401).json({ error: 'Unauthorized: User ID not found.' });
     return;
   }
 
-  // Attach userId to the request object for easy access in route handlers
   req.userId = userId;
 
-  // Optional: Ensure user exists in your 'users' table
   try {
     const userExists = await query('SELECT id FROM users WHERE id = $1', [userId]);
     if (userExists.rows.length === 0) {
-      // Clerk's auth object directly contains email addresses
-      const userEmail = req.auth?.user?.emailAddresses?.[0]?.emailAddress || `${userId}@example.com`; // Access email from req.auth.user
+      // FIX: Access email from the authObject returned by req.auth()
+      const userEmail = authObject?.user?.emailAddresses?.[0]?.emailAddress || `${userId}@example.com`;
       await query('INSERT INTO users (id, email) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [userId, userEmail]);
       console.log(`Synced new user ${userId} to database.`);
     }
@@ -94,15 +112,10 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/notes', noteRoutes);
 
-// Basic health check route
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', message: 'Backend is healthy' });
-});
 
 // Global error handler (should be the last middleware)
 app.use(((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err.stack);
-  // Clerk's authMiddleware can throw an error with a statusCode of 401
   if (err.statusCode === 401 && err.message === 'Unauthorized') {
     return res.status(401).json({ error: 'Authentication Required' });
   }
