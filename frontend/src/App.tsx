@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-react";
+import { ClerkProvider, RedirectToSignIn, SignedIn, SignedOut } from "@clerk/clerk-react";
 
 import AppLayout from "./components/layout/AppLayout"; // Assuming this path remains
 import Dashboard from "./pages/Dashboard"; // Assuming this path remains
@@ -136,22 +136,27 @@ const AppContent = () => {
 
             {/* Protected routes - only accessible when signed in */}
             <Route
-              path="/app/*"
+              path="/app" // Changed path from "/app/*" to "/app" for base path
               element={
-                <SignedIn>
-                  <AppLayout />
-                </SignedIn>
+                <>
+                  <SignedIn>
+                    <AppLayout /> {/* AppLayout will render the Outlet for nested routes */}
+                  </SignedIn>
+                  <SignedOut>
+                    <RedirectToSignIn /> {/* Redirects to sign-in if not authenticated */}
+                  </SignedOut>
+                </>
               }
             >
               <Route
-                index
+                index // This makes /app redirect to /app/dashboard by default
+                element={<Navigate to="dashboard" replace />}
+              />
+              <Route
+                path="dashboard"
                 element={
                   <Dashboard
-                    tasks={tasks || []}
-                    notes={notes || []}
-                    projects={(projects || []).map(p => ({ id: p.id, name: p.name }))} // Ensure project ID is number
-                    onToggleTaskComplete={(id) => updateTask(Number(id), { completed: !tasks?.find(t => t.id === Number(id))?.completed })}
-                    onDeleteTask={(id) => deleteTask(Number(id))}
+                   
                   />
                 }
               />
@@ -243,7 +248,9 @@ const App = () => {
     <ClerkProvider publishableKey={clerkPubKey}>
       {/* Provide the QueryClient to the entire application */}
       <QueryClientProvider client={queryClient}>
+        <>
         <AppContent />
+        </>
       </QueryClientProvider>
     </ClerkProvider>
   );
