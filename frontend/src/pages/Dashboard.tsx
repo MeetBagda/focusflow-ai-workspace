@@ -211,7 +211,10 @@ const Dashboard: React.FC<DashboardProps> = () => {
 
               <div className="mt-4 text-center">
                 <Button variant="outline" asChild>
-                  <Link to="/app/tasks">View All Tasks</Link> {/* Updated link to /app/tasks */}
+                  <>
+                  <Link to="/app/tasks">View All Tasks</Link> {''}
+                  {/* Updated link to /app/tasks */}
+                  </>
                 </Button>
               </div>
             </CardContent>
